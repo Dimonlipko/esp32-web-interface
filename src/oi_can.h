@@ -25,7 +25,7 @@ namespace OICan {
 enum SetResult { Ok, UnknownIndex, ValueOutOfRange, CommError };
 enum BaudRate { Baud125k, Baud250k, Baud500k };
 
-void Init(uint8_t nodeId, BaudRate baud);
+void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin);
 void Loop();
 bool SendJson(WiFiClient c);
 void SendCanMapping(WiFiClient c);
