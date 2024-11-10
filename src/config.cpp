@@ -10,8 +10,8 @@ void Config::load() {
     if (settings.version != EEPROM_VERSION) {
         //defaults
         settings.version = EEPROM_VERSION;
-        settings.canRXPin = GPIO_NUM_26;
-        settings.canTXPin = GPIO_NUM_25;
+        settings.canRXPin = GPIO_NUM_21;
+        settings.canTXPin = GPIO_NUM_20;
         settings.canEnablePin = 0;
     }
 }
