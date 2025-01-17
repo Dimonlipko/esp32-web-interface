@@ -59,7 +59,7 @@
 namespace OICan {
 
 enum State { IDLE, ERROR, OBTAINSERIAL, OBTAIN_JSON };
-enum UpdState { UPD_IDLE, SEND_MAGIC, SEND_SIZE, SEND_PAGE, CHECK_CRC, REQUEST_JSON };
+enum UpdState { UPD_IDLE, SEND_MAGIC, SEND_SIZE, SEND_PAGE, CHECK_CRC, REQUEST_JSON, STOP_UPDATE};
 
 static uint8_t _nodeId;
 static BaudRate baudRate;
@@ -70,7 +70,7 @@ static char jsonFileName[20];
 static twai_message_t tx_frame;
 static File updateFile;
 static int currentPage = 0;
-static const size_t PAGE_SIZE_BYTES = 1024;
+static const size_t PAGE_SIZE_BYTES = 256;
 static int retries = 0;
 
 static void requestSdoElement(uint16_t index, uint8_t subIndex) {
@@ -214,28 +214,38 @@ static void handleUpdate(twai_message_t *rxframe) {
   static int currentByte = 0;
   static uint32_t crc;
 
-  switch (updstate) {
+  switch(updstate) {
     case SEND_MAGIC:
-      if (rxframe->data[0] == 0x33) {
-        tx_frame.identifier = 0x7dd;
-        tx_frame.data_length_code = 4;
+      //if (rxframe->data[0] == 0x33) {
+        tx_frame.identifier = 0x79b;
+        tx_frame.data_length_code = 8;
 
         //For now just reflect ID
-        tx_frame.data[0] = rxframe->data[4];
-        tx_frame.data[1] = rxframe->data[5];
-        tx_frame.data[2] = rxframe->data[6];
-        tx_frame.data[3] = rxframe->data[7];
-        updstate = SEND_SIZE;
+        tx_frame.data[0] = 0xEF;
+        tx_frame.data[1] = 0xBE;
+        tx_frame.data[2] = 0xAD;
+        tx_frame.data[3] = 0xDE;
+        tx_frame.data[4] = 0xCE;
+        tx_frame.data[5] = 0xFA;
+        tx_frame.data[6] = 0xFE;
+        tx_frame.data[7] = 0xCA;
+
         DBG_OUTPUT_PORT.printf("Sending ID %" PRIu32 "\r\n", *(uint32_t*)tx_frame.data);
         twai_transmit(&tx_frame, pdMS_TO_TICKS(10));
 
-        if (rxframe->data[1] < 1) //boot loader with timing quirk, wait 100 ms
-          delay(100);
-      }
+        if(rxframe->data[0] == 0xAD && rxframe->data[1] == 0xDE && rxframe->data[2] == 0xAF && rxframe->data[3] == 0xDE)
+        {
+          updstate = SEND_PAGE; // change
+          DBG_OUTPUT_PORT.printf("Start SEND_PAGE");
+        }
+
+        //if (rxframe->data[1] < 1) //boot loader with timing quirk, wait 100 ms
+        // delay(600);
+      //}
       break;
     case SEND_SIZE:
       if (rxframe->data[0] == 'S') {
-        tx_frame.identifier = 0x7dd;
+        tx_frame.identifier = 0x79b;
         tx_frame.data_length_code = 1;
 
         tx_frame.data[0] = (updateFile.size() + PAGE_SIZE_BYTES - 1) / PAGE_SIZE_BYTES;
@@ -248,8 +258,18 @@ static void handleUpdate(twai_message_t *rxframe) {
       }
       break;
     case SEND_PAGE:
-      if (rxframe->data[0] == 'P') {
-        char buffer[8];
+
+      static uint16_t location = 0;
+      static bool send_first_page = 0;
+
+      if(rxframe->data[0] == 0xAD && rxframe->data[1] == 0xDE && rxframe->data[2] == 0xAF && rxframe->data[3] == 0xDE)
+        {
+          send_first_page = 1; // change
+          DBG_OUTPUT_PORT.printf("Start SEND_PAGE");
+        }
+
+      if (rxframe->data[1] * 256 + rxframe->data[0] == location - 1 || send_first_page == 1) {
+        char buffer[5];
         size_t bytesRead = 0;
 
         if (currentByte < updateFile.size()) {
@@ -257,28 +277,48 @@ static void handleUpdate(twai_message_t *rxframe) {
           bytesRead = updateFile.readBytes(buffer, sizeof(buffer));
         }
 
-        while (bytesRead < 8)
+        if (bytesRead < 5)
+        {
+          updstate = STOP_UPDATE;
+          DBG_OUTPUT_PORT.printf("STOP_UPDATE");
+        }
+        else
+        {
+          updstate = SEND_PAGE;
+        }
+        
+        while (bytesRead < 5)
+        {
           buffer[bytesRead++] = 0xff;
-
+        }
         currentByte += bytesRead;
+
         crc = crc32_word(crc, *(uint32_t*)&buffer[0]);
         crc = crc32_word(crc, *(uint32_t*)&buffer[4]);
 
         tx_frame.identifier = 0x7dd;
         tx_frame.data_length_code = 8;
-        tx_frame.data[0] = buffer[0];
-        tx_frame.data[1] = buffer[1];
-        tx_frame.data[2] = buffer[2];
-        tx_frame.data[3] = buffer[3];
-        tx_frame.data[4] = buffer[4];
-        tx_frame.data[5] = buffer[5];
-        tx_frame.data[6] = buffer[6];
-        tx_frame.data[7] = buffer[7];
+        tx_frame.data[0] = 0xFF;
+        tx_frame.data[1] = location & 0xff;
+        tx_frame.data[2] = location >> 8;
+        tx_frame.data[3] = buffer[0];
+        tx_frame.data[4] = buffer[1];
+        tx_frame.data[5] = buffer[2];
+        tx_frame.data[6] = buffer[3];
+        tx_frame.data[7] = buffer[4];
 
-        updstate = SEND_PAGE;
+    
         twai_transmit(&tx_frame, pdMS_TO_TICKS(10));
+
+        if(send_first_page == 1)
+        {
+          send_first_page = 0;
+        }
+
+        location++;
       }
-      else if (rxframe->data[0] == 'C') {
+
+        if (rxframe->data[7] == 'C') {
         tx_frame.identifier = 0x7dd;
         tx_frame.data_length_code = 4;
         tx_frame.data[0] = crc & 0xFF;
@@ -293,19 +333,19 @@ static void handleUpdate(twai_message_t *rxframe) {
     case CHECK_CRC:
       crc = 0xFFFFFFFF;
       DBG_OUTPUT_PORT.printf("Sent bytes %u-%u... ", currentPage * PAGE_SIZE_BYTES, currentByte);
-      if (rxframe->data[0] == 'P') {
+      if (rxframe->data[7] == 'P') {
         updstate = SEND_PAGE;
         currentPage++;
         DBG_OUTPUT_PORT.printf("CRC Good\r\n");
         handleUpdate(rxframe);
       }
-      else if (rxframe->data[0] == 'E') {
+      else if (rxframe->data[7] == 'E') {
         updstate = SEND_PAGE;
         currentByte = currentPage * PAGE_SIZE_BYTES;
         DBG_OUTPUT_PORT.printf("CRC Error\r\n");
         handleUpdate(rxframe);
       }
-      else if (rxframe->data[0] == 'D') {
+      else if (rxframe->data[7] == 'D') {
         updstate = REQUEST_JSON;
         state = OBTAINSERIAL;
         retries = 50;
@@ -319,6 +359,10 @@ static void handleUpdate(twai_message_t *rxframe) {
     case UPD_IDLE:
       // Do not exit this state
       break;
+    case STOP_UPDATE:
+        updateFile.close();
+        DBG_OUTPUT_PORT.printf("Done!\r\n");
+      break;
   }
 }
 
@@ -326,11 +370,31 @@ int StartUpdate(String fileName) {
   updateFile = SPIFFS.open(fileName, "r");
   //Reset host processor
   setValueSdo(SDO_INDEX_COMMANDS, SDO_CMD_RESET, 1U);
-  updstate = SEND_MAGIC;
+  tx_frame.identifier = 0x79b;
+  tx_frame.data_length_code = 8;
+
+        //For now just reflect ID
+  tx_frame.data[0] = 0xEF;
+  tx_frame.data[1] = 0xBE;
+  tx_frame.data[2] = 0xAD;
+  tx_frame.data[3] = 0xDE;
+  tx_frame.data[4] = 0xCE;
+  tx_frame.data[5] = 0xFA;
+  tx_frame.data[6] = 0xFE;
+  tx_frame.data[7] = 0xCA;
+
+  twai_transmit(&tx_frame, pdMS_TO_TICKS(10));
+
+  
   currentPage = 0;
-  DBG_OUTPUT_PORT.println("Starting Update");
+  DBG_OUTPUT_PORT.println("Starting Update. SoftWare Size ");
+  DBG_OUTPUT_PORT.println(updateFile.size());
+
+  updstate = SEND_PAGE;
+
 
   return (updateFile.size() + PAGE_SIZE_BYTES - 1) / PAGE_SIZE_BYTES;
+
 }
 
 int GetCurrentUpdatePage() {
@@ -687,7 +751,7 @@ void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
     break;
   }
 
-  twai_filter_config_t f_config = {.acceptance_code = (uint32_t)(id << 5) | (uint32_t)(0x7de << 21),
+  twai_filter_config_t f_config = {.acceptance_code = (uint32_t)(id << 5) | (uint32_t)(0x7bb << 21),
                                    .acceptance_mask = 0x001F001F,
                                    .single_filter = false};
 
@@ -721,8 +785,10 @@ void Loop() {
       handleSdoResponse(&rxframe);
       recvdResponse = true;
     }
-    else if (rxframe.identifier == 0x7de)
+    else if (rxframe.identifier == 0x7bb){
       handleUpdate(&rxframe);
+      //DBG_OUTPUT_PORT.printf("Get 7bb");
+    }
     else
       DBG_OUTPUT_PORT.printf("Received unwanted frame %" PRIu32 "\r\n", rxframe.identifier);
   }

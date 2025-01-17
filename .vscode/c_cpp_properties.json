@@ -10,6 +10,10 @@
             "includePath": [
                 "c:/Platformio projects/esp32-web-interface",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
+<<<<<<< Updated upstream
+=======
+                "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
+>>>>>>> Stashed changes
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdateServer/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/SPIFFS/src",
@@ -235,7 +239,10 @@
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
+<<<<<<< Updated upstream
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
+=======
+>>>>>>> Stashed changes
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
                 "C:/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
@@ -247,6 +254,10 @@
                 "path": [
                     "c:/Platformio projects/esp32-web-interface",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
+<<<<<<< Updated upstream
+=======
+                    "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
+>>>>>>> Stashed changes
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdateServer/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/SPIFFS/src",
@@ -472,7 +483,10 @@
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
+<<<<<<< Updated upstream
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
+=======
+>>>>>>> Stashed changes
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
                     "C:/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
@@ -483,6 +497,12 @@
             "defines": [
                 "PLATFORMIO=60116",
                 "ARDUINO_ESP32C3_DEV",
+<<<<<<< Updated upstream
+=======
+                "ARDUINO_USB_CDC_ON_BOOT=1",
+                "ARDUINO_USB_MODE=1",
+                "DEBUG",
+>>>>>>> Stashed changes
                 "DEBUG_ESP_PORT=Serial",
                 "DEBUG_ESP_CORE",
                 "DEBUG_ESP_WIFI",
