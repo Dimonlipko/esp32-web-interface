@@ -60,13 +60,13 @@
 #include "src/config.h"
 
 #define DBG_OUTPUT_PORT Serial
-#define INVERTER_PORT UART_NUM_2
+#define INVERTER_PORT UART_NUM_1
 #define INVERTER_RX 16
 #define INVERTER_TX 17
 #define UART_TIMEOUT (100 / portTICK_PERIOD_MS)
 #define UART_MESSBUF_SIZE 100
 #ifndef LED_BUILTIN
-#define LED_BUILTIN  5
+#define LED_BUILTIN  8
 #endif
 
 #define RESERVED_SD_SPACE 2000000000
@@ -105,106 +105,7 @@ File dataFile;
 int startLogAttempt = 0;
 Config config;
 
-uint32_t deleteOldest(uint64_t spaceRequired);
 
-bool createNextSDFile()
-{
-  char filename[50];
-
-  uint32_t nextFileIndex = deleteOldest(RESERVED_SD_SPACE);
-
-  if(haveRTC)
-    nextFileIndex = 0; //have a date so restart index from 0 (still needed in case serial stream fails to start)
-
-  do
-  {
-    if(haveRTC)
-      snprintf(filename, 50, "/%d-%02d-%02d-%02d-%02d-%02d_%" PRIu32 ".bin", int_rtc.getYear(), int_rtc.getMonth(), int_rtc.getDay(), int_rtc.getHour(), int_rtc.getMinute(), int_rtc.getSecond(), nextFileIndex++);
-    else
-      snprintf(filename, 50, "/%010" PRIu32 ".bin", nextFileIndex++);
-  }
-  while(SD_MMC.exists(filename));
-
-  dataFile = SD_MMC.open(filename, FILE_WRITE);
-  if (dataFile)
-  {
-    dataFile.flush(); //make sure FAT updated for debugging purposes
-    DBG_OUTPUT_PORT.println("Created file: " + String(filename));
-    return true;
-  }
-  else
-    return false;
-}
-
-uint32_t deleteOldest(uint64_t spaceRequired)
-{
-  File root, file;
-  String oldestFileName;
-  uint64_t spaceRem;
-  time_t t;
-  uint32_t nextIndex = 0;
-  uint32_t fileCount = 0;
-
-  spaceRem = SD_MMC.totalBytes() - SD_MMC.usedBytes();
-
-  DBG_OUTPUT_PORT.println("Space Required = " + formatBytes(spaceRequired));
-  DBG_OUTPUT_PORT.println("Space Remaining = " + formatBytes(spaceRem));
-
-  do
-  {
-    root = SD_MMC.open("/");
-
-    time_t oldestTime = 0;
-    fileCount = 0;
-    while(file = root.openNextFile())
-    {
-      if(haveRTC)
-        t = file.getLastWrite();
-      else
-      {
-        String fname = file.name();
-        fname.remove(0,1); //lose starting /
-        t = fname.toInt()+1; //make sure 0 special case isnt used
-        if(t > nextIndex)
-          nextIndex = t;
-      }
-      if(!file.isDirectory())
-      {
-        fileCount++;
-        if((oldestTime==0) || (t<oldestTime))
-        {
-          oldestTime = t;
-          oldestFileName = "/";
-          oldestFileName += file.name();
-        }
-      }
-      file.close();
-    }
-    root.close();
-
-    if((spaceRem < spaceRequired) || (fileCount >= MAX_SD_FILES))
-    {
-      if(oldestFileName.length() > 0)
-      {
-
-        if(SD_MMC.remove(oldestFileName))
-          DBG_OUTPUT_PORT.println("Deleted file: " + oldestFileName);
-        else
-          DBG_OUTPUT_PORT.println("Couldn't delete: " + oldestFileName);
-      }
-      else
-      {
-        DBG_OUTPUT_PORT.println("No files found, can't free space");
-        break;//no files so can do no more
-      }
-    }
-
-    spaceRem = SD_MMC.totalBytes() - SD_MMC.usedBytes();
-  } while((spaceRem < spaceRequired) || (fileCount >= MAX_SD_FILES));
-
-
-  return(nextIndex);
-}
 
 //format bytes
 String formatBytes(uint64_t bytes){
@@ -250,20 +151,6 @@ bool handleFileRead(String path){
     server.streamFile(file, contentType);
     file.close();
     return true;
-  }
-  //try download from the sdcard
-  if (haveSDCard) {
-    DBG_OUTPUT_PORT.print("handleFileRead Trying SD Card: ");
-    DBG_OUTPUT_PORT.println(path);
-    DBG_OUTPUT_PORT.print("SD_MMC.exists: ");
-    DBG_OUTPUT_PORT.println(SD_MMC.exists( path));
-
-    if (SD_MMC.exists(path)) {
-      File file = SD_MMC.open(path, "r");
-      server.streamFile(file, contentType);
-      file.close();
-    return true;
-    }
   }
   return false;
 }
@@ -347,50 +234,15 @@ void handleRTCSet() {
 }
 void handleSdCardDeleteAll() {
     if (haveSDCard) {
-      File root, file;
-      root = SD_MMC.open("/");
-      while(file = root.openNextFile()) {
-        String filename = file.name();
-        if(SD_MMC.remove("/" + filename))
-          DBG_OUTPUT_PORT.println("Deleted file: " + filename);
-        else
-          DBG_OUTPUT_PORT.println("Couldn't delete: " + filename);
-      }
+     
     }
 
     server.send(200, "text/json", "{\"result\": \"done\"}");
 
 }
+
 void handleSdCardList() {
 
-  if (!haveSDCard) {
-    server.send(200, "text/json", "{\"error\": \"No SD Card\"}");
-    return;
-  }
-  File root = SD_MMC.open("/");
-  if(!root){
-    server.send(200, "text/json", "{\"error\": \"Failed to open directory\"}");
-    return;
-  }
-  if(!root.isDirectory()){
-    server.send(200, "text/json", "{\"error\": \"Root is not a directory\"}");
-    return;
-  }
-  File sdFile = root.openNextFile();
-  String output = "[";
-  int count = 0;
-  while(sdFile && count < 200){
-    if (output != "[") output += ',';
-    output += "\"";
-    output += String(sdFile.name());
-    output += "\"";
-    sdFile = root.openNextFile();
-
-    count++;
-  }
-  output += "]";
-  server.send(200, "text/json", output);
-  return;
 }
 
 void handleFileList() {
@@ -426,7 +278,7 @@ void uart_readUntill(char val)
   int retVal;
   do
   {
-    retVal = uart_read_bytes(UART_NUM_2, uartMessBuff, 1, UART_TIMEOUT);
+    retVal = uart_read_bytes(UART_NUM_1, uartMessBuff, 1, UART_TIMEOUT);
   }
   while((retVal>0) && (uartMessBuff[0] != val));
 }
@@ -434,7 +286,7 @@ void uart_readUntill(char val)
 bool uart_readStartsWith(const char *val)
 {
   bool retVal = false;
-  int rxBytes = uart_read_bytes(UART_NUM_2, uartMessBuff, strnlen(val,UART_MESSBUF_SIZE), UART_TIMEOUT);
+  int rxBytes = uart_read_bytes(UART_NUM_1, uartMessBuff, strnlen(val,UART_MESSBUF_SIZE), UART_TIMEOUT);
   if(rxBytes >= strnlen(val,UART_MESSBUF_SIZE))
   {
     if(strncmp(val, uartMessBuff, strnlen(val,UART_MESSBUF_SIZE))==0)
@@ -684,39 +536,11 @@ void setup(void){
         .rx_flow_ctrl_thresh = UART_HW_FLOWCTRL_DISABLE,
         .source_clk = UART_SCLK_APB};
 
-  uart_param_config(INVERTER_PORT, &uart_config);
-  uart_set_pin(INVERTER_PORT, INVERTER_TX, INVERTER_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-  uart_driver_install(INVERTER_PORT, SDIO_BUFFER_SIZE * 3, 0, 0, NULL, 0); //x3 allows twice card write size to buffer while writes
   delay(100);
 
   pinMode(LED_BUILTIN, OUTPUT);
 
-  //check for external RTC and if present use to initialise on-chip RTC
-  if (ext_rtc.begin())
-  {
-    haveRTC = true;
-    DBG_OUTPUT_PORT.println("External RTC found");
-    if (! ext_rtc.initialized() || ext_rtc.lostPower())
-    {
-      DBG_OUTPUT_PORT.println("RTC is NOT initialized, setting to build time");
-      ext_rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
-
-    ext_rtc.start();
-    DateTime now = ext_rtc.now();
-    int_rtc.setTime(now.unixtime());
-  }
-  else
-    DBG_OUTPUT_PORT.println("No RTC found, defaulting to sequential file names");
-
-  //initialise SD card in SDIO mode
-  //if (SD_MMC.begin("/sdcard", true, false, 40000, 5U)) {
-  if (SD_MMC.begin()) {
-    DBG_OUTPUT_PORT.println("Started SD_MMC");
-    haveSDCard = true;
-  }
-  else
-    DBG_OUTPUT_PORT.println("Couldn't start SD_MMC");
+ 
 
   //Start SPI Flash file system
   SPIFFS.begin();
@@ -794,32 +618,7 @@ void setup(void){
 
 void binaryLoggingStart()
 {
-  if(createNextSDFile())
-  {
-    sendCommand(""); //flush out buffer in case just had power up
-    delay(10);
-    sendCommand("binarylogging 1"); //send start logging command to inverter
-    delayMicroseconds(200);
-    if (uart_readStartsWith("OK"))
-    {
-      uart_set_baudrate(INVERTER_PORT, 2250000);
-      fastLoggingActive = true;
-      DBG_OUTPUT_PORT.println("Binary logging started");
-    }
-    else //no response - in case it did actually switch but we missed response send the turn off command
-    {
-      dataFile.close();
-      uart_set_baudrate(INVERTER_PORT, 2250000);
-      uart_write_bytes(INVERTER_PORT, "\n", 1);
-      delay(1);
-      uart_write_bytes(INVERTER_PORT, "binarylogging 0", strlen("binarylogging 0"));
-      uart_write_bytes(INVERTER_PORT, "\n", 1);
-      uart_wait_tx_done(INVERTER_PORT, UART_TIMEOUT);
-      uart_set_baudrate(INVERTER_PORT, 115200);
-    }
-    delay(10);
-    uart_flush(INVERTER_PORT);
-  }
+  
 }
 
 void binaryLoggingStop()
