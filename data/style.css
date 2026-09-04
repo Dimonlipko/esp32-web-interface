@@ -1,164 +1,232 @@
 /*
- * This file is part of the esp8266 web interface
+ * This file is part of the esp32 web interface
  *
- * Copyright (C) 2018 Johannes Huebner <dev@johanneshuebner.com>
+ * Оформлення знято з diag-тула Electric Engines (diag.electricengines.com.ua):
+ * темний сайдбар, біла верхня панель зі статусними лампами, картки на світлому
+ * тлі, бірюзовий акцент, світла/темна тема.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * Контракт із ui.js навмисне збережено: #navbar 180/60 px, #content-wrapper
+ * left/width, .tabdiv display:none -> flex, .buttonimg 24/60 px,
+ * .small-screen-hide display block/none. Усе це ui.js виставляє інлайном, тож
+ * значення тут мусять збігатися.
  */
 
-* {
-    transition: 0.5s;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+:root{
+    --bg-body:#f0f2f5; --bg-card:#fff; --bg-sidebar:#333; --bg-topbar:#fff;
+    --bg-input:#fff; --bg-input-ro:#f5f5f5; --bg-btn:#fff; --bg-btn-hover:#f0f0f0;
+    --bg-progress:#e0e0e0; --bg-sidebar-hover:#444; --bg-row-hover:#f7f9fa;
+    --bg-thead:#f4f6f8; --bg-overlay:rgba(0,0,0,.5);
+    --text-primary:#333; --text-secondary:#555; --text-label:#444; --text-muted:#999;
+    --text-sidebar:#ccc; --text-sidebar-title:#aaa;
+    --border-color:#e0e0e0; --border-light:#ddd; --border-input:#ccc; --border-hover:#ccc;
+    --border-sidebar-bottom:#444;
+    --accent:#00DDC0; --accent-hover:#00b39b; --accent-soft:rgba(0,221,192,.15);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.05); --shadow-md:0 2px 4px rgba(0,0,0,.1);
+    --shadow-lg:0 6px 20px rgba(0,0,0,.08); --shadow-inset:inset 0 2px 4px rgba(0,0,0,.1);
+    --status-default:#e0e0e0; --status-ok:#28a745; --status-warn:#ffc107; --status-error:#dc3545;
+    --bg-terminal:#1e1e1e; --terminal-text:#0f0;
+}
+[data-theme=dark]{
+    --bg-body:#121212; --bg-card:#1e1e1e; --bg-sidebar:#1a1a1a; --bg-topbar:#1e1e1e;
+    --bg-input:#2a2a2a; --bg-input-ro:#252525; --bg-btn:#2a2a2a; --bg-btn-hover:#353535;
+    --bg-progress:#333; --bg-sidebar-hover:#2a2a2a; --bg-row-hover:#242424;
+    --bg-thead:#242424; --bg-overlay:rgba(0,0,0,.7);
+    --text-primary:#e0e0e0; --text-secondary:#aaa; --text-label:#bbb; --text-muted:#777;
+    --text-sidebar:#aaa; --text-sidebar-title:#777;
+    --border-color:#333; --border-light:#333; --border-input:#444; --border-hover:#555;
+    --border-sidebar-bottom:#333;
+    --accent-soft:rgba(0,221,192,.12);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow-md:0 2px 4px rgba(0,0,0,.4);
+    --shadow-lg:0 6px 20px rgba(0,0,0,.3); --shadow-inset:inset 0 2px 4px rgba(0,0,0,.3);
+    --status-default:#444; --bg-terminal:#0a0a0a;
 }
 
-a {
-    text-decoration: none;
-    color: #4CAF50;
-}
-
-a:visited {
-    color: #4CAF50;
-}
-
-p {
-    margin: 0em 0em 0.5em 0rem ;
-}
-
-h2 {
-    padding-top: 5px;
-}
-
-h3 {
-    padding: 20px 0px 10px 0px;
-    margin: 0px;
-}
-
-.underline {
-    border-bottom: solid 1px #CCC;
-}
+* { box-sizing: border-box; }
 
 html, body {
-    font-family: sans-serif;
-    font-size: 12pt;
-    -webkit-text-size-adjust: none;
-    -moz-text-size-adjust: none;
-    -ms-text-size-adjust: none;
-    margin:0;
-    padding:0;
-    height: 100%;
-}
-
-
-
-.graph {
-    width: 298px; /* width and height are arbitrary, just make sure the #bar styles are changed accordingly */
-    height: 30px;
-    border: 1px solid #888;
-    background: rgb(168,168,168);
-    background: -moz-linear-gradient(top, rgba(168,168,168,1) 0%, rgba(204,204,204,1) 23%);
-    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(168,168,168,1)), color-stop(23%,rgba(204,204,204,1)));
-    background: -webkit-linear-gradient(top, rgba(168,168,168,1) 0%,rgba(204,204,204,1) 23%);
-    background: -o-linear-gradient(top, rgba(168,168,168,1) 0%,rgba(204,204,204,1) 23%);
-    background: -ms-linear-gradient(top, rgba(168,168,168,1) 0%,rgba(204,204,204,1) 23%);
-    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#a8a8a8', endColorstr='#cccccc',GradientType=0 );
-    background: linear-gradient(top, rgba(168,168,168,1) 0%,rgba(204,204,204,1) 23%);
-    position: relative;
-}
-
-#upload-firmware-bar {
-    height: 29px; /* Not 30px because the 1px top-border brings it up to 30px to match #graph */
-    background: rgb(255,197,120);
-    background: -moz-linear-gradient(top, rgba(255,197,120,1) 0%, rgba(244,128,38,1) 100%);
-    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(255,197,120,1)), color-stop(100%,rgba(244,128,38,1)));
-    background: -webkit-linear-gradient(top, rgba(255,197,120,1) 0%,rgba(244,128,38,1) 100%);
-    background: -o-linear-gradient(top, rgba(255,197,120,1) 0%,rgba(244,128,38,1) 100%);
-    background: -ms-linear-gradient(top, rgba(255,197,120,1) 0%,rgba(244,128,38,1) 100%);
-    background: linear-gradient(top, rgba(255,197,120,1) 0%,rgba(244,128,38,1) 100%);
-    border-top: 1px solid #fceabb;
-}
-
-#upload-firmware-bar p {
-    position: absolute;
-    text-align: center;
-    width: 100%;
     margin: 0;
-    line-height: 30px;
+    padding: 0;
+    height: 100%;
+    font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
 }
 
-.error {
-    /* These styles are arbitrary */
-    background-color: #fceabb;
-    padding: 1em;
-    font-weight: bold;
-    color: red;
-    border: 1px solid red;
+h2 { font-size: 1.4em; font-weight: 500; margin: 0 0 15px 0; }
+h3 { font-size: 1.1em; font-weight: 500; margin: 0 0 12px 0; }
+p  { margin: 8px 0; }
+a  { color: var(--accent-hover); text-decoration: none; }
+a:visited { color: var(--accent-hover); }
+
+.underline {
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 6px;
+    display: block;
 }
 
-
-
-/* Navbar */
-
+/* --- сайдбар ------------------------------------------------------------ */
 #navbar {
-	background-color: #4CAF50;
+    background-color: var(--bg-sidebar);
     min-height: 100vh;
     position: fixed;
     width: 180px;
-    overflow-y: scroll;
-    height:100%;
-    overflow-x:hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: 100%;
+    z-index: 900;
+    transition: width .2s ease;
 }
-
 #navbar a {
     text-decoration: none;
-    display: block;
-    margin:0;
-    color: black;
-    float: left;
+    display: flex;
+    min-height: 40px;      /* тримає висоту рядка, коли підпис сховано */
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 0 14px;
+    color: var(--text-sidebar);
+    border-top: 1px solid transparent;
+    border-bottom: 1px solid var(--border-sidebar-bottom);
+    font-weight: 500;
+    cursor: pointer;
+    float: none;
 }
-
-#navbar img {
-    display: block;
-    float: left;
-    padding: 5px 10px 5px 10px;
+#navbar a:hover { background-color: var(--bg-sidebar-hover); color: #fff; }
+#navbar a.active {
+    border-top: 2px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
+    color: #fff;
+    background-color: var(--bg-sidebar-hover);
 }
-
+#navbar img, #navbar svg {
+    display: block;
+    float: none;
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    stroke: currentColor;
+    fill: none;
+}
 #navbar p {
     margin: 0;
     vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: .8em;
+    letter-spacing: .04em;
 }
-
-/* Logo */
-
 #logo {
-    padding: 10px 0 10px 0;
+    padding: 10px 0;
     height: 100px;
     margin: 0;
+    border-bottom: 1px solid var(--border-sidebar-bottom);
 }
-
+/* Селектори з #logo, бо #navbar img задає 20x20 і має ту саму вагу. */
 #logo img {
-    width: 50%;
-    margin-left: auto;
-    margin-right: auto;
+    height: auto;
+    margin: 0 auto;
     display: block;
     float: none;
+    cursor: pointer;
+}
+#logo .logo-full { width: 82%; }
+#logo .logo-mark { width: 34px; display: none; }
+#navbar.collapsed #logo .logo-full { display: none; }
+#navbar.collapsed #logo .logo-mark { display: block; }
+#navbar.collapsed .navbar-text { display: none; }
+#navbar.collapsed a { justify-content: center; padding: 0; }
+
+.tablink {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    line-height: 40px;
+    padding: 0;
+}
+#version {
+    padding: 5px;
+    margin: 10px;
+    text-align: center;
+    float: none;
+    width: auto;
+    font-size: 10px;
+    color: var(--text-sidebar-title);
+    border: 1px solid var(--border-sidebar-bottom);
+    border-radius: 4px;
+    min-height: 30px;
+    word-break: break-all;
+}
+#version p { font-size: 11px; padding: 0; margin: 0; color: var(--text-sidebar-title); }
+.control { margin: 10px; color: var(--text-sidebar); font-size: .85em; }
+.control label { color: var(--text-sidebar-title); }
+#nodeid-div input, #nodeid-div select {
+    width: 100%;
+    margin-bottom: 6px;
 }
 
+/* --- верхня панель ------------------------------------------------------ */
+#topbar {
+    height: 52px;
+    background-color: var(--bg-topbar);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 500;
+}
+#topbar-title { font-weight: 600; letter-spacing: .04em; }
+/* Сюди ui.sendCmd кладе відповідь на save/load — раніше це був бокс дашборда. */
+.topbar-msg {
+    color: var(--text-muted);
+    font-size: .85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+#topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; min-width: 0; }
+.icon-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}
+.icon-btn:hover { background-color: var(--bg-btn-hover); border-color: var(--border-hover); }
+.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; }
+.theme-icon-moon { display: none; }
+[data-theme=dark] .theme-icon-moon { display: block; }
+[data-theme=dark] .theme-icon-sun  { display: none; }
 
-/* content-wrapper */
+.status-group {
+    display: flex; align-items: center; gap: 6px;
+    font-size: .85em; color: var(--text-secondary); font-weight: 500;
+}
+.status-light {
+    width: 10px; height: 10px; border-radius: 50%;
+    background-color: var(--status-default);
+    flex-shrink: 0;
+    transition: background-color .3s;
+}
+.status-light.ok       { background-color: var(--status-ok); }
+.status-light.warn     { background-color: var(--status-warn); animation: pulse 1s infinite; }
+.status-light.error    { background-color: var(--status-error); }
+.status-label { white-space: nowrap; }
+@keyframes pulse { 0%{opacity:1} 50%{opacity:.3} 100%{opacity:1} }
 
+/* --- каркас контенту ---------------------------------------------------- */
+#content { display: flex; height: 100%; }
 #content-wrapper {
     display: block;
     width: calc(100% - 180px);
@@ -166,493 +234,250 @@ html, body {
     height: 100%;
     min-height: 100vh;
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    top: 0; right: 0; bottom: 0;
     left: 180px;
 }
-
 #content-wrapper-inner {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     width: 100%;
-    min-height: 100vh;
     position: relative;
     align-items: stretch;
+    padding: 15px;
+    gap: 15px;
 }
-
-/* Button & forms */
-
-textarea {
-    width: 98%;
-}
-
-input[type=number]{
-    width: 6em;
-}
-
-form {
-    margin:0px; padding:0px; display:inline;
-}
-
-.butt {
-    font-size: 100%;
-    padding: 5px;
-    padding-right: 10px;
-    background-color: #4CAF50;
-    color: black;
-    -webkit-transition-duration: 0.4s; /* Safari */
-    transition-duration: 0.4s;
-    border: 2px solid #307533;
-    margin: 5px 5px 5px 0px;
-    display: flex;
-    justify-content: safe left;
-    align-items: center;
-    flex-grow: 0;
-    border-radius: 4px;
-}
-
-.butt label:hover {
-    background-color: #efefef;
-    color: black;
-}
-
-button {
-	font-size: 100%;
-	padding: 5px;
-    padding-right: 10px;
-	background-color: #4CAF50;
-	color: black;
-	-webkit-transition-duration: 0.4s; /* Safari */
-    transition-duration: 0.4s;
-    border: 2px solid #307533;
-    margin: 5px 5px 5px 0px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 4px;
-}
-
-button:hover, input[type=file]:hover, input[type=button]:hover {
-    background-color: #efefef;
-    color: black;
-}
-
-.buttonimg {
-    padding: 0 10px 0 10px;
-    width: 20px;
-}
-
-input[type=file], input[type=button] {
-}
-
-select {
-    appearance: none;
-    font-size: 12pt;
-    margin: 5px;
-    padding: 5px;
-    border: 2px solid #4CAF50;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    background: #FFF;
-}
-
-input[type=number] {
-    margin: 5px;
-    padding: 5px;
-    border: 2px solid #4CAF50;
-    border-radius: 4px;
-    font-size: 12pt;
-}
-
-/* tables */
-
-thead tr th {
-  position: sticky;
-  top: 0;
-  padding: 7px;
-}
-
-table {
-    border-collapse: collapse;
-    width: 100%;
-}
-
-tbody {
-    overflow: auto;
-}
-
-td {
-    padding: 2px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-}
-
-th {
-    padding: 2px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-    background-color:#e5e5e5;
-    z-index: 1;
-}
-
-tr:hover {
-    background-color:#f5f5f5;
-}
-
 .tabdiv {
     display: none;
-    margin-left: 60px;
-    padding-left: 20px;
-    float: left;
-    background-color:#FFFFFF;
+    margin-left: 0;
+    padding-left: 0;
+    float: none;
+    background-color: transparent;
 }
+.main-content { order: 2; margin: 0; flex: 10 1 300px; min-width: 0; }
+.main-left    { order: 2; flex: 10 1 200px; margin-right: 10px; min-width: 0; overflow-y: auto; }
+.main-right   { order: 3; flex: 0 0 15%; min-width: 200px; padding-top: 0; }
+/* Заголовки секцій у правій колонці інакше злипаються з кнопкою над ними. */
+.main-right h3 { margin-top: 22px; }
+.main-right h3:first-child { margin-top: 0; }
+.main-right form { display: block; }
+.fullheight { height: 100%; }
 
-.tablink {
-    width: 200px;
-    display: flex;
-    justify-content: center;
+/* --- елементи керування ------------------------------------------------- */
+button, input[type=button], input[type=file] {
+    background-color: var(--bg-btn);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: .95em;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    display: inline-flex;
     align-items: center;
-    line-height: 30px;
-    padding: 0px;
+    gap: 8px;
+    margin: 4px 0;
+    transition: background-color .1s, border-color .1s;
 }
-
-.fullheight {
-    height: 90vh;
+button:hover, input[type=button]:hover, input[type=file]:hover {
+    background-color: var(--bg-btn-hover);
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
 }
-
-/* content */
-
-#content {
-    display: flex;
-    height: 100%;
+button:active { border-color: var(--accent); transform: translateY(1px); box-shadow: var(--shadow-inset); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+input[type=file] { max-width: 100%; }
+.buttonimg { width: 24px; height: 24px; flex-shrink: 0; }
+/* Іконки кнопок — чорні PNG з апстріму; у темній темі інвертуємо. */
+[data-theme=dark] .buttonimg { filter: invert(1) brightness(1.4); }
+/* label, застилізований під кнопку (вибір файлу) — має вести себе як кнопка */
+.butt {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-btn);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    margin: 4px 0;
 }
+.butt:hover, .butt label:hover { background-color: var(--bg-btn-hover); }
 
-/* paramaters */
-
-#params table {
-    width: 100%;
+input[type=text], input[type=number], input[type=password], select, textarea {
+    padding: 7px 8px;
+    border: 1px solid var(--border-input);
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: .95em;
+    transition: border-color .2s, box-shadow .2s;
 }
-
-#canvas {
-    width: 100%;
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
 }
+input[readonly] { background-color: var(--bg-input-ro); color: var(--text-secondary); }
+textarea { width: 100%; }
+form { margin: 0; }
+label { color: var(--text-label); font-weight: 600; }
 
-/* content divs */
-
-.main-content {
-    order: 2;
-    margin: 0px;
-    flex: 10 1 300px;
-    height: 100vh;
+/* перемикач Auto reload */
+.switch { position: relative; display: inline-block; width: 44px; height: 22px; vertical-align: middle; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background-color: var(--bg-progress);
+    transition: .3s;
 }
-
-.main-left {
-    order: 2;
-    flex: 10 1 200px;
-    margin-right: 10px;
-    height: 100vh;
-    overflow-y: auto;
+.slider:before {
+    position: absolute; content: "";
+    height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background-color: #fff;
+    transition: .3s;
 }
+input:checked + .slider { background-color: var(--accent); }
+input:focus + .slider { box-shadow: 0 0 0 2px var(--accent-soft); }
+input:checked + .slider:before { transform: translateX(22px); }
+.slider.round { border-radius: 22px; }
+.slider.round:before { border-radius: 50%; }
 
-.main-right {
-    height: 100%;
-    padding-top: 10px;
-    order: 3;
-    flex: 0 0 15%;
-}
-
-/* dashboard */
-
-.dash-row {
-    display: flex;
-}
-
-.dash-box {
-    padding: 15px;
-    margin: 5px;
-    border-radius: 10px;
-    border: 2px solid #444;
-    height: 200px;
-    flex: 1 1 300px;
-}
-
-.dash-box h3 {
-    padding: 5px 0px 10px 0px;
-}
-
-/* CAN Mapping */
-
-#addcanmapping {
-    display: none;
-    padding: 10px;
-    border-radius: 20px;
-    background: #DDD;
-    margin-top: 30px;
-}
-
-#addcanmapping h3 {
+/* --- таблиці ------------------------------------------------------------ */
+table { border-collapse: collapse; width: 100%; }
+thead tr th, th {
+    background-color: var(--bg-thead);
+    color: var(--text-label);
+    text-align: left;
+    font-weight: 600;
     padding: 8px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
 }
+td { padding: 6px 8px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+tbody tr:hover, tr:hover { background-color: var(--bg-row-hover); }
+#params table { width: 100%; }
+#canmapping tbody { display: table-row-group; }
+#addcanmapping h3 { margin-top: 15px; }
+#addcanmapping { margin-top: 10px; }
 
-#canmapping tbody {
-    padding: 100px;
-}
-
-/* modal */
-
+/* --- модалки ------------------------------------------------------------ */
 .modal-overlay {
     display: none;
     position: fixed;
-    width: 100%;
-    height: 100%;
-    z-index: 5;
-    left: 0;
-    top: 0;
-    background-color: rgb(0,0,0);
-    background-color: rgba(0,0,0,0.4);
-    //overflow: auto;
+    inset: 0;
+    background-color: var(--bg-overlay);
+    z-index: 1000;
 }
-
-.large-modal-container {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 40px;
-    border: 1px solid #888;
-    border-radius: 10px;
-    width: 50%;
-    height: 50%;
+.large-modal-container, .small-modal-container, .can-mapping-modal-container {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    margin: 5vh auto;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    max-height: 90vh;
+    overflow-y: auto;
 }
+.large-modal-container { width: min(90%, 900px); }
+.can-mapping-modal-container { width: min(90%, 800px); }
+.small-modal-container { width: min(90%, 420px); }
+.large-modal-container h2 { margin-top: 0; }
+#large-modal-header-div { display: flex; align-items: center; justify-content: space-between; }
+.modal-content { margin-top: 10px; }
+.modal-close { cursor: pointer; font-size: 26px; line-height: 1; color: var(--text-muted); }
+.modal-close:hover { color: var(--text-primary); }
 
-.large-modal-container h2 {
-    padding-bottom: 10px;
-    display: inline;
-}
-
-#large-modal-header-div {
-    padding: 0 0 1em 0;
-}
-
-.modal-content {
-    //border: 1px solid #DDD;
-    height: 90%;
-    width: 100%;
-    overflow: auto;
-}
-
-.modal-close {
-    color: #aaaaaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-}
-
-.small-modal-container {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 20px 40px 20px 40px;
-    border: 1px solid #888;
-    border-radius: 10px;
-    width: 300px;
-}
-
-.can-mapping-modal-container {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 40px;
-    border: 1px solid #888;
-    width: 50%;
-    border-radius: 5px;
-}
-
-#commandoutput {
-    height: calc(100% - 60px);
-    overflow: auto;
-    margin-bottom: 5px;
-}
-
-#commandinput {
-    width: 80%;
-}
-
-#wifiInner {
-    display: block;
-}
-
-/* plot */
-
-.plotField {
-    display: flex;
-}
-
-/* logger */
-
-.logger-field {
-    display: flex;
-}
-
-/* controls below navbar */
-#nodeid-div input {
-    width: 3em;
-}
-
-.control {
-  margin-left: 10px;
-  margin-top: 10px;
-}
-
-.beta-feature {
-    display: none;
-}
-/* version */
-
-#version {
-    padding: 0px;
-    padding-top: 5px;
-    padding-bottom: 5px;
-    margin: 0px;
-    margin-left: 10px;
-    margin-bottom: 10px;
-    text-align: center;
-    float: left;
-    width: 160px;
-    font-size: 10pt;
-    border: 1px solid black;
-    border-radius: 4px;
-    height: 30px;
-
-}
-
-#version p {
-    font-size: 12px;
-    padding: 0px;
-    margin: 0px;
-    color: #444;
-    margin-bottom: auto;
-}
-/* switch */
-
-/* The switch - the box around the slider */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 30px;
-  height: 17px;
-  margin-right: 10px;
-}
-
-/* Hide default HTML checkbox */
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-/* The slider */
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  -webkit-transition: .4s;
-  transition: .4s;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 9px;
-  width: 9px;
-  left: 4px;
-  bottom: 4px;
-  background-color: white;
-  -webkit-transition: .4s;
-  transition: .4s;
-}
-
-input:checked + .slider {
-  background-color: orange;
-}
-
-input:focus + .slider {
-  box-shadow: 0 0 1px #2196F3;
-}
-
-input:checked + .slider:before {
-  -webkit-transform: translateX(13px);
-  -ms-transform: translateX(13px);
-  transform: translateX(13px);
-}
-
-/* Rounded sliders */
-.slider.round {
-  border-radius: 17px;
-}
-
-.slider.round:before {
-  border-radius: 50%;
-}
-
-
-/** TOOLTIP */
-
-
-.tooltip {
-  position: relative;
-  display: inline-block;
-  border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
-}
-
-.tooltip .tooltiptext {
-  visibility: hidden;
-  width: 120px;
-  background-color: black;
-  color: #fff;
-  text-align: center;
-  padding: 10px;
-  border-radius: 6px;
-  position: absolute;
-  z-index: 10;
-  top: -5px;
-  left: 120%;
-}
-
-.tooltip:hover .tooltiptext {
-  visibility: visible;
-}
-
-@media only screen and (max-width: 1000px) {
-    #logo {
-        width: 80px;
-        height: 50px;
-    }
-    .buttonimg {
-        width: 60px;
-    }
-}
-
-/* notification bar */
-
+/* --- службові смуги ----------------------------------------------------- */
 .communication-error-bar {
     display: none;
-    padding: 15px;
-    background-color: #f44336;
-    color: white;
-    z-index: 100;
-    margin: 0 auto;
-    position: relative;
-    width: 30%;
-    top: 0px;
-    clear: left;
-    height: 20px;
-    border-radius: 0px 0px 20px 20px;
-}
-
-.communication-error-bar p {
+    background-color: var(--status-error);
+    color: #fff;
     text-align: center;
+    padding: 6px;
+    position: sticky;
+    top: 52px;
+    z-index: 400;
+}
+.communication-error-bar p { margin: 0; font-weight: 600; }
+#upload-firmware-bar {
+    background-color: var(--bg-progress);
+    border-radius: 4px;
+    height: 22px;
+    overflow: hidden;
+    margin: 8px 0;
+}
+#upload-firmware-bar p {
+    background-color: var(--accent);
+    color: var(--text-primary);
+    margin: 0;
+    height: 100%;
+    width: 0;
+    text-align: center;
+    line-height: 22px;
+    font-size: 12px;
+    transition: width .2s;
+}
+#spinner-div img { height: 16px; }
+.error { color: var(--status-error); font-weight: 600; }
+.beta-feature { border-left: 3px solid var(--accent); padding-left: 8px; }
+#wifiInner, #settingsInner { max-width: 760px; }
+
+/* --- підказки ----------------------------------------------------------- */
+.tooltip { position: relative; border-bottom: 1px dotted var(--text-muted); cursor: help; }
+.tooltip .tooltiptext {
+    visibility: hidden;
+    background-color: var(--bg-sidebar);
+    color: #fff;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 6px;
+    position: absolute;
+    z-index: 800;
+    width: 260px;
+    left: 0; top: 125%;
+    font-weight: 400;
+    box-shadow: var(--shadow-md);
+}
+.tooltip:hover .tooltiptext { visibility: visible; }
+
+/* --- термінал Клари ------------------------------------------------------ */
+/* ui.js вмикає вкладці display:flex — решта вкладок покладаються на рядок
+   (.main-left/.main-right), а тут потрібна колонка. */
+#clara { flex-direction: column; align-items: stretch; }
+#clara-input, #clara-log {
+    font-family: ui-monospace, Consolas, Monaco, 'Courier New', monospace;
+}
+#clara-log {
+    width: 100%;
+    background-color: var(--bg-terminal);
+    color: var(--terminal-text);
+    border-radius: 6px;
+    padding: 10px;
+    height: 60vh;
+    min-height: 240px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+#clara-log .lost { color: var(--status-warn); }
+#clara-log .sent { color: var(--accent); }
+.clara-bar { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+#clara-input { flex: 1 1 auto; }
+.clara-hint { color: var(--text-muted); font-size: .85em; }
+
+/* --- вузький екран ------------------------------------------------------ */
+@media only screen and (max-width: 1000px) {
+    #logo { width: 80px; height: 50px; }
+    .buttonimg { width: 60px; }
+    #content-wrapper-inner { flex-wrap: wrap; }
+    .main-right { flex: 1 1 100%; }
+    .status-label { display: none; }
 }

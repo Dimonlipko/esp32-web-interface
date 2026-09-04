@@ -51,39 +51,20 @@
 #include <Ticker.h>
 #include <StreamString.h>
 
-#include <SD_MMC.h>
-#include "RTClib.h"
-#include <ESP32Time.h>
+#include <SPIFFS.h>
 #include <time.h>
-#include "driver/uart.h"
 #include "src/oi_can.h"
+#include "src/clara_uart.h"
 #include "src/config.h"
 
 #define DBG_OUTPUT_PORT Serial
-#define INVERTER_PORT UART_NUM_1
-#define INVERTER_RX 16
-#define INVERTER_TX 17
-#define UART_TIMEOUT (100 / portTICK_PERIOD_MS)
-#define UART_MESSBUF_SIZE 100
 #ifndef LED_BUILTIN
 #define LED_BUILTIN  8
 #endif
 
-#define RESERVED_SD_SPACE 2000000000
-#define SDIO_BUFFER_SIZE 16384
-#define FLUSH_WRITES 60 //flush file every 60 blocks
-
-#define MAX_SD_FILES 200
-
-#define LOG_DELAY_VAL 10000
-
-//HardwareSerial Inverter(INVERTER_PORT);
 
 const char* host = "inverter";
 bool fastUart = false;
-bool fastUartAvailable = true;
-char uartMessBuff[UART_MESSBUF_SIZE];
-char jsonFileName[50];
 //DynamicJsonDocument jsonDoc(30000);
 
 WebServer server(80);
@@ -92,18 +73,10 @@ HTTPUpdateServer updater;
 File fsUploadFile;
 Ticker sta_tick;
 
-RTC_PCF8523 ext_rtc;
-ESP32Time int_rtc;
-bool haveRTC = false;
-bool haveSDCard = false;
-bool fastLoggingEnabled = true;
-bool fastLoggingActive = false;
-uint8_t SDIObuffer[SDIO_BUFFER_SIZE];
-uint16_t indexSDIObuffer = 0;
-uint16_t blockCountSD = 0;
-File dataFile;
-int startLogAttempt = 0;
 Config config;
+
+// Буфер під JSON терміналу: 128 рядків по 80 символів плюс лапки й коми.
+static char termBuf[12288];
 
 
 
@@ -188,133 +161,6 @@ void handleFileDelete(){
   path = String();
 }
 
-void handleFileCreate(){
-  if(server.args() == 0)
-    return server.send(500, "text/plain", "BAD ARGS");
-  String path = server.arg(0);
-  //DBG_OUTPUT_PORT.println("handleFileCreate: " + path);
-  if(path == "/")
-    return server.send(500, "text/plain", "BAD PATH");
-  if(SPIFFS.exists(path))
-    return server.send(500, "text/plain", "FILE EXISTS");
-  File file = SPIFFS.open(path, "w");
-  if(file)
-    file.close();
-  else
-    return server.send(500, "text/plain", "CREATE FAILED");
-  server.send(200, "text/plain", "");
-  path = String();
-}
-
-void handleRTCNow() {
-  String output = "{ \"now\":\"";
-  if (haveRTC) {
-    DateTime t = ext_rtc.now();
-    output += t.timestamp();
-  } else {
-    output += "NO RTC";
-  }
-  output += "\"}";
-  server.send(200, "text/json", output);
-}
-
-void handleRTCSet() {
-
- if (server.hasArg("timestamp")) {
-    String timestamp = server.arg("timestamp");
-    server.send(200, "text/json", "{\"result\":\"" + timestamp + "\"}");
-    DateTime now = DateTime(timestamp.toInt());
-    ext_rtc.adjust(now);
-    int_rtc.setTime(now.unixtime());
-    handleRTCNow();
- } else {
-    server.send(500, "text/json", "{\"result\":\"timestamp missing\"}");
-
- }
-}
-void handleSdCardDeleteAll() {
-    if (haveSDCard) {
-     
-    }
-
-    server.send(200, "text/json", "{\"result\": \"done\"}");
-
-}
-
-void handleSdCardList() {
-
-}
-
-void handleFileList() {
-  String path = "/";
-  if(server.hasArg("dir"))
-    path = server.arg("dir");
-  //DBG_OUTPUT_PORT.println("handleFileList: " + path);
-  File root = SPIFFS.open(path);
-  String output = "[";
-
-  if(!root){
-    //DBG_OUTPUT_PORT.print("- failed to open directory");
-    return;
-  }
-
-  File file = root.openNextFile();
-  while(file){
-    if (output != "[") output += ',';
-    output += "{\"type\":\"";
-    output += file.isDirectory()?"dir":"file";
-    output += "\",\"name\":\"";
-    output += String(file.name());
-    output += "\"}";
-    file = root.openNextFile();
-  }
-
-  output += "]";
-  server.send(200, "text/json", output);
-}
-
-void uart_readUntill(char val)
-{
-  int retVal;
-  do
-  {
-    retVal = uart_read_bytes(UART_NUM_1, uartMessBuff, 1, UART_TIMEOUT);
-  }
-  while((retVal>0) && (uartMessBuff[0] != val));
-}
-
-bool uart_readStartsWith(const char *val)
-{
-  bool retVal = false;
-  int rxBytes = uart_read_bytes(UART_NUM_1, uartMessBuff, strnlen(val,UART_MESSBUF_SIZE), UART_TIMEOUT);
-  if(rxBytes >= strnlen(val,UART_MESSBUF_SIZE))
-  {
-    if(strncmp(val, uartMessBuff, strnlen(val,UART_MESSBUF_SIZE))==0)
-      retVal = true;
-    uartMessBuff[rxBytes] = 0;
-    DBG_OUTPUT_PORT.println(uartMessBuff);
-  }
-  return retVal;
-}
-
-
-
-static void sendCommand(String cmd)
-{
-  DBG_OUTPUT_PORT.println("Sending '" + cmd + "' to inverter");
-  //Inverter.print("\n");
-  uart_write_bytes(INVERTER_PORT, "\n", 1);
-  delay(1);
-  //while(Inverter.available())
-  //  Inverter.read(); //flush all previous output
-  uart_flush(INVERTER_PORT);
-  //Inverter.print(cmd);
-  uart_write_bytes(INVERTER_PORT, cmd.c_str(), cmd.length());
-  //Inverter.print("\n");
-  uart_write_bytes(INVERTER_PORT, "\n", 1);
-  //Inverter.readStringUntil('\n'); //consume echo
-  uart_readUntill('\n');
-}
 
 static void handleCommand() {
   if(!server.hasArg("cmd")) {server.send(500, "text/plain", "BAD ARGS"); return;}
@@ -437,11 +283,42 @@ static void handleNodeId()
 static void handleSettings()
 {
   bool updated = true;
-  if(server.hasArg("canRXPin") && server.hasArg("canRXPin")  && server.hasArg("canEnablePin"))
+  // Раніше друга умова дублювала canRXPin, тож форма без canTXPin проходила далі
+  // й atoi("") клав туди 0.
+  if(server.hasArg("canRXPin") && server.hasArg("canTXPin") && server.hasArg("canEnablePin"))
   {
-    config.setCanRXPin(atoi(server.arg("canRXPin").c_str()));
-    config.setCanTXPin(atoi(server.arg("canTXPin").c_str()));
-    config.setCanEnablePin(atoi(server.arg("canEnablePin").c_str()));
+    int rx = atoi(server.arg("canRXPin").c_str());
+    int tx = atoi(server.arg("canTXPin").c_str());
+    int en = atoi(server.arg("canEnablePin").c_str());
+
+    if (!Config::isValidPin(rx) || !Config::isValidPin(tx) ||
+        (en != 0 && !Config::isValidPin(en)))
+    {
+      server.send(400, "text/plain", "Invalid GPIO for ESP32-C3 (allowed: 0-10, 20, 21)");
+      return;
+    }
+
+    config.setCanRXPin(rx);
+    config.setCanTXPin(tx);
+    config.setCanEnablePin(en);
+
+    if (server.hasArg("claraBaud"))
+    {
+      int cbaud = atoi(server.arg("claraBaud").c_str());
+      int crx = atoi(server.arg("claraRXPin").c_str());
+      // Порожнє поле TX = слухаємо Клару, але нічого не шлемо.
+      int ctx = server.arg("claraTXPin").length() ? atoi(server.arg("claraTXPin").c_str()) : -1;
+
+      if (cbaud != 0 && (!Config::isValidPin(crx) || (ctx >= 0 && !Config::isValidPin(ctx))))
+      {
+        server.send(400, "text/plain", "Invalid GPIO for ESP32-C3 (allowed: 0-10, 20, 21)");
+        return;
+      }
+      config.setClaraRXPin(crx);
+      config.setClaraTXPin(ctx);
+      config.setClaraBaud(cbaud);
+      ClaraUart::Init(crx, ctx, cbaud);
+    }
 
     config.saveSettings();
     OICan::Init(OICan::GetNodeId(), OICan::GetBaudRate(), config.getCanTXPin(), config.getCanRXPin());
@@ -460,6 +337,9 @@ static void handleSettings()
     html.replace("%canRXPin%", String(config.getCanRXPin()).c_str());
     html.replace("%canTXPin%", String(config.getCanTXPin()).c_str());
     html.replace("%canEnablePin%", String(config.getCanEnablePin()).c_str());
+    html.replace("%claraRXPin%", String(config.getClaraRXPin()).c_str());
+    html.replace("%claraTXPin%", config.getClaraTXPin() < 0 ? "" : String(config.getClaraTXPin()).c_str());
+    html.replace("%claraBaud%", String(config.getClaraBaud()).c_str());
 
     server.send(200, "text/html", html);
     updated = false;
@@ -468,9 +348,37 @@ static void handleSettings()
   if (updated)
   {
     File file = SPIFFS.open("/settings-updated.html", "r");
-    size_t sent = server.streamFile(file, getContentType("settings-updated.html"));
+    server.streamFile(file, getContentType("settings-updated.html"));
     file.close();
   }
+}
+
+
+/** @brief віддає рядки з Клари, новіші за since. Стан тримає клієнт, не сервер. */
+static void handleTermGet()
+{
+  uint32_t since = server.hasArg("since") ? strtoul(server.arg("since").c_str(), NULL, 10) : 0;
+  size_t len = ClaraUart::Json(since, termBuf, sizeof(termBuf));
+  // Через setContentLength/sendContent, щоб не копіювати 12 КБ у String.
+  server.setContentLength(len);
+  server.send(200, "application/json", "");
+  server.sendContent(termBuf, len);
+}
+
+/** @brief шле рядок у термінал Клари; cmd=clear чистить буфер локально. */
+static void handleTermPost()
+{
+  if (server.hasArg("clear")) { ClaraUart::Clear(); server.send(200, "text/plain", "OK"); return; }
+  if (!server.hasArg("cmd")) { server.send(400, "text/plain", "BAD ARGS"); return; }
+
+  if (config.getClaraTXPin() < 0 || !ClaraUart::IsRunning())
+  {
+    server.send(409, "text/plain", "TX line not configured");
+    return;
+  }
+
+  ClaraUart::Send(server.arg("cmd").c_str());
+  server.send(200, "text/plain", "OK");
 }
 
 
@@ -524,17 +432,6 @@ void staCheck(){
 
 void setup(void){
   DBG_OUTPUT_PORT.begin(115200);
-  //Inverter.setRxBufferSize(50000);
-  //Inverter.begin(115200, SERIAL_8N1, INVERTER_RX, INVERTER_TX);
-  //Need to use low level Espressif IDF API instead of Serial to get high enough data rates
-  uart_config_t uart_config = {
-        .baud_rate = 115200,
-        .data_bits = UART_DATA_8_BITS,
-        .parity    = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .rx_flow_ctrl_thresh = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB};
 
   delay(100);
 
@@ -567,25 +464,15 @@ void setup(void){
 
   OICan::Init(1, OICan::Baud500k, config.getCanTXPin(), config.getCanRXPin());
 
+  ClaraUart::Init(config.getClaraRXPin(), config.getClaraTXPin(), config.getClaraBaud());
+
   updater.setup(&server);
 
   //SERVER INIT
   ArduinoOTA.setHostname(host);
   ArduinoOTA.begin();
-  //list directory
-  server.on("/list", HTTP_GET, handleFileList);
-
-  server.on("/rtc/now", HTTP_GET, handleRTCNow);
-  server.on("/rtc/set", HTTP_POST, handleRTCSet);
-  server.on("/sdcard/list", HTTP_GET, handleSdCardList);
-  server.on("/sdcard/deleteAll", HTTP_GET, handleSdCardDeleteAll);
-
-  //load editor
-  server.on("/edit", HTTP_GET, [](){
-    if(!handleFileRead("/edit.htm")) server.send(404, "text/plain", "FileNotFound");
-  });
-  //create file
-  server.on("/edit", HTTP_PUT, handleFileCreate);
+  // Менеджер файлів прибрано з UI; /edit лишається, бо ним заливає upload.sh
+  // і ним же ui.js пише/стирає subscription.js.
   //delete file
   server.on("/edit", HTTP_DELETE, handleFileDelete);
   //first callback is called after the request has ended with all parsed arguments
@@ -600,6 +487,8 @@ void setup(void){
   server.on("/version", [](){ server.send(200, "text/plain", "1.1.R"); });
   server.on("/nodeid", handleNodeId);
   server.on("/settings", handleSettings);
+  server.on("/api/term", HTTP_GET, handleTermGet);
+  server.on("/api/term", HTTP_POST, handleTermPost);
 
   //called when the url is not defined here
   //use it to load content from SPIFFS
@@ -616,82 +505,11 @@ void setup(void){
   MDNS.addService("http", "tcp", 80);
 }
 
-void binaryLoggingStart()
-{
-  
-}
-
-void binaryLoggingStop()
-{
-  uart_write_bytes(INVERTER_PORT, "\n", 1);
-  delay(1);
-  uart_write_bytes(INVERTER_PORT, "binarylogging 0", strlen("binarylogging 0"));
-  uart_write_bytes(INVERTER_PORT, "\n", 1);
-  uart_wait_tx_done(INVERTER_PORT, UART_TIMEOUT);
-  uart_set_baudrate(INVERTER_PORT, 115200);
-  delay(100);
-  uart_flush(INVERTER_PORT);
-  //data should now have stopped so send command again and check response
-  sendCommand("binarylogging 0");
-  if (uart_readStartsWith("OK"))
-  {
-    uart_set_baudrate(INVERTER_PORT, 115200);
-    fastUart = false;
-    fastLoggingActive = false;
-    dataFile.flush(); //make sure up to date
-    dataFile.close();
-    DBG_OUTPUT_PORT.println("Binary logging terminated");
-  }
-  else
-  { //assume still logging so try again next time round
-    uart_set_baudrate(INVERTER_PORT, 2250000);
-  }
-  delay(10);
-  uart_flush(INVERTER_PORT);
-}
-
 void loop(void){
   // note: ArduinoOTA.handle() calls MDNS.update();
   server.handleClient();
   ArduinoOTA.handle();
 
   OICan::Loop();
-
-  if((WiFi.softAPgetStationNum() > 0) || (WiFi.status() == WL_CONNECTED))
-  { //have connections so stop logging
-    startLogAttempt=0; //restart log attempts when next disconnected
-    if(fastLoggingActive) //was it active last pass
-      binaryLoggingStop();
-  }
-  else
-  { //no connections so log
-    if(fastLoggingActive) //already active, just carry on writing data
-    {
-      int spaceAvail = SDIO_BUFFER_SIZE - indexSDIObuffer;
-      int bytesRead = uart_read_bytes(INVERTER_PORT, &SDIObuffer[indexSDIObuffer], spaceAvail, UART_TIMEOUT);
-      if(bytesRead > 0)
-      {
-        indexSDIObuffer += bytesRead;
-        if(indexSDIObuffer >= SDIO_BUFFER_SIZE)
-        {
-          dataFile.write(SDIObuffer, SDIO_BUFFER_SIZE);
-          indexSDIObuffer = 0;
-          blockCountSD++;
-          if(blockCountSD >= FLUSH_WRITES)
-          {
-            blockCountSD = 0;
-            dataFile.flush();
-          }
-        }
-      }
-    }
-    else //not active so start
-    {
-      if(haveSDCard && fastLoggingEnabled && (startLogAttempt < 3) && (millis() > LOG_DELAY_VAL))
-      {
-        startLogAttempt++;
-        binaryLoggingStart();
-      }
-    }
-  }
+  ClaraUart::Loop();
 }

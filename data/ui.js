@@ -123,25 +123,11 @@ var ui = {
 	/** @brief excutes when page finished loading. Creates tables and chart */
 	onLoad: function()
 	{
-		// Set up listener to execute commands when enter is pressed (dashboard, command box)
-		var commandinput = document.getElementById('commandinput');
-		commandinput.addEventListener("keyup", function(event)
-		{
-			if ( event.keyCode == 13 )
-			{
-	            event.preventDefault();
-	            ui.dashboardCommand();
-			}
-		});
-
 		ui.updateTables();
-		plot.generateChart();
 		ui.parameterDatabaseCheckForUpdates();
 		inverter.canMapping(ui.populateExistingCanMappingTable);
 		wifi.populateWiFiTab();
 		settings.populateSettingsTab();
-		ui.populateFileList();
-		ui.refreshStatusBox();
 		ui.getNodeId();
 		ui.setAutoReload(true);
 	},
@@ -150,7 +136,6 @@ var ui = {
 	refresh: function()
 	{
 		ui.updateTables();
-		ui.refreshStatusBox();
 	},
 
 	getNodeId: function() {
@@ -403,106 +388,6 @@ var ui = {
 	hideCommunicationErrorBar: function() {
 		document.getElementById('communication-error-bar').style.display = 'none';
 	},
-	/**
-	 * ~~~ DASHBOARD ~~~
-	 */
-
-    /** @brief refresh the data in the status box (top left corner of dashboard page) */
-	refreshStatusBox: function()
-	{
-
-		var statusDiv = document.getElementById('top-left');
-
-		var status = paramsCache.get('status');
-
-		if ( status == null ){
-			return;
-		}
-
-		var lasterr = paramsCache.get('lasterr');
-		var udc = paramsCache.get('udc');
-		var tmphs = paramsCache.get('tmphs');
-		var opmode = paramsCache.get('opmode');
-
-		statusDiv.innerHTML = "";
-
-		var tbl = document.createElement('table');
-		var tbody = document.createElement('tbody');
-		// status
-		var tr = document.createElement('tr');
-		var td = document.createElement('td');
-		td.appendChild(document.createTextNode('Status'));
-		tr.appendChild(td);
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode(status));
-		tr.appendChild(td);
-		tbody.appendChild(tr);
-		// opmode
-		tr = document.createElement('tr');
-	    td = document.createElement('td');
-		td.appendChild(document.createTextNode('Opmode'));
-		tr.appendChild(td);
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode(opmode));
-		tr.appendChild(td);
-		tbody.appendChild(tr);
-		// lasterr
-		tr = document.createElement('tr');
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode('Last error'));
-		tr.appendChild(td);
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode(lasterr));
-		tr.appendChild(td);
-		tbody.appendChild(tr);
-		// udc
-		tr = document.createElement('tr');
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode('Battery voltage (udc)'));
-		tr.appendChild(td);
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode(udc));
-		tr.appendChild(td);
-		tbody.appendChild(tr);
-		// tmphs
-		tr = document.createElement('tr');
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode('Inverter temperature'));
-		tr.appendChild(td);
-		td = document.createElement('td');
-		td.appendChild(document.createTextNode(tmphs));
-		tr.appendChild(td);
-		tbody.appendChild(tr);
-
-
-		tbl.appendChild(tbody);
-		statusDiv.appendChild(tbl);
-
-    },
-
-    /** @brief execute command entered in the command box on the dashboard */
-    dashboardCommand: function()
-    {
-    	// Get command entered
-    	var commandinput = document.getElementById('commandinput').value;
-    	// Get output box
-    	var commandoutput = document.getElementById('commandoutput');
-    	inverter.sendCmd(commandinput, function(reply){
-            commandoutput.innerHTML += reply + "<br>";
-            // Scroll output if needed
-    	    commandoutput.scrollTop = commandoutput.scrollHeight;
-    	});
-    },
-
-    /** @brief get error messages from inverter and put them in the messages box on the dashboard page */
-    refreshMessagesBox: function(){
-    	var messageBox = document.getElementById('message');
-    	inverter.sendCmd('errors', function(reply){
-            messageBox.innerHTML = reply;
-    	});
-    },
-
-
     /**
      * ~~~ UPDATE ~~~
      */
@@ -594,8 +479,6 @@ var ui = {
 			modal.emptyModal('small');
 			modal.appendToModal('small', 'File upload complete');
 			modal.showModal('small');
-			// Refresh the list of files on the 'files' page
-			ui.populateFileList();
 			setTimeout(function() { modal.hideModal('small') }, 2000);
 		}
 
@@ -1090,89 +973,6 @@ var ui = {
 
 
 	/**
-	 * ~~~ PLOT & GAUGE ~~~
-	 */
-
-
-    /** @brief Add new field chooser to plot configuration form */
-	addPlotItem: function()
-	{
-		// Get the form
-		var plotFields = document.getElementById("plotConfiguration");
-
-		// container for the two drop downs
-		var selectDiv = document.createElement("div");
-		selectDiv.classList.add('plotField');
-		plotFields.appendChild(selectDiv);
-
-		// Create a drop down and populate it with the possible spot values
-		var selectSpotValue = document.createElement("select");
-		selectSpotValue.classList.add('plotFieldSelect');
-		for ( var key in paramsCache.getData() )
-		{
-			if ( ! paramsCache.getEntry(key).isparam )
-			{
-				var option = document.createElement("option");
-				option.value = key;
-				option.text = key;
-				selectSpotValue.appendChild(option);
-			}
-		}
-		selectDiv.appendChild(selectSpotValue);
-
-		// Create the left/right drop down
-		var selectLeftRight = document.createElement("select");
-		selectLeftRight.classList.add("leftright");
-
-		var optionLeft = document.createElement("option");
-		optionLeft.value = 'left';
-		optionLeft.text = 'left';
-		selectLeftRight.appendChild(optionLeft);
-
-		var optionRight = document.createElement("option");
-		optionRight.value = 'right';
-		optionRight.text = 'right';
-		selectLeftRight.appendChild(optionRight);
-		selectDiv.appendChild(selectLeftRight);
-
-		// Add the delete button
-		var deleteButton = document.createElement("button");
-		var deleteButtonImg = document.createElement('img');
-		deleteButtonImg.src = '/icon-trash.png';
-		deleteButton.appendChild(deleteButtonImg);
-		deleteButton.onclick = function() { this.parentNode.remove(); };
-		selectDiv.appendChild(deleteButton);
-	},
-
-    /** @brief get the current configuration of the plot. I.e., what values should it show. */
-	getPlotItems: function()
-	{
-		var items = {};
-    	items.names = new Array();
-	    items.axes = new Array();
-		var formItems = document.forms["plotConfiguration"].elements;
-		for ( var i = 0; i < formItems.length; i++ )
-		{
-            // Gather up field selections
-			if ( formItems[i].type === 'select-one' && formItems[i].classList.contains('plotFieldSelect') )
-			{
-				items.names.push(formItems[i].value);
-			}
-
-			// Gather up left/right selections
-			if ( formItems[i].type === 'select-one' && formItems[i].classList.contains('leftright') )
-			{
-				items.axes.push(formItems[i].value);
-			}
-		}
-        return items;
-	},
-
-	/**
-	 * DATA LOGGER
-	 */
-
-	/**
 	 * CAN MAPPING
 	 */
 
@@ -1250,42 +1050,8 @@ var ui = {
 
 
 	/**
-	 * FILES
+	 * FILES — лишився тільки видалювач, ним користується скасування підписки
 	 */
-
-    /** @brief populate the list of files table */
-	populateFileList: function()
-	{
-		var filesTable = document.getElementById('filesTable');
-		// emtpy the table
-		while (filesTable.rows.length > 1) filesTable.deleteRow(1);
-		// fetch file list and populate table
-		inverter.getFiles(function(files)
-		{
-			for ( var i = 0; i < files.length; i++ )
-			{
-				var tr = filesTable.insertRow(-1);
-				// filename name
-				var fileNameCell = tr.insertCell(-1);
-				fileNameCell.innerHTML = "<a href=" + files[i]['name'] + ">" + files[i]['name'] + "</a>";
-				// delete button
-				var deleteFileCell = tr.insertCell(-1);
-				deleteFileCell.innerHTML = "<button onclick=\"ui.showDeleteFileConfirmationModal('" + files[i]['name'] + "');\"><img class=\"buttonimg\" src=\"/icon-trash.png\">Delete File</button>";
-			}
-		});
-	},
-
-	showDeleteFileConfirmationModal: function(filename)
-	{
-		modal.emptyModal('small');
-		var msg = "<p>Are you sure you want to delete file '" + filename + "'?</p>";
-		msg += "<div style=\"display:flex\">";
-		msg += "<button onclick=\"ui.deleteFile('/" + filename + "');\"><img class=\"buttonimg\" src=\"/icon-trash.png\">Delete file</button>";
-		msg += "<button onclick=\"modal.hideModal('small');\"><img class=\"buttonimg\" src=\"/icon-x-square.png\">Cancel</button>";
-		msg += "</div>";
-		modal.appendToModal('small', msg);
-		modal.showModal('small');
-	},
 
 	deleteFile: function(filename)
 	{
@@ -1294,9 +1060,6 @@ var ui = {
 		params.f = "/" + filename;
 		deleteFileRequest.onload = function()
     	{
-    		// re-build file list
-    		ui.populateFileList();
-    		// hide modal
     		modal.hideModal('small');
     	};
 
