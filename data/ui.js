@@ -379,6 +379,73 @@ var ui = {
     }
 	},
 
+	/** @brief POST a form over XHR and stay inside the SPA.
+	 *
+	 * settings.html and wifi.html wrap their submit button in <a href="#"> and call
+	 * ui.settingsForm() / ui.wifiStationForm() / wifi.wifiStationForm() — none of which
+	 * ever existed, here or upstream. The click threw a TypeError and the browser fell
+	 * back to a native form submit that navigated the whole app away to a stub page,
+	 * which then redirected to a hardcoded http://192.168.4.1/ — dead end whenever the
+	 * ESP is joined to a normal network instead of serving its own AP.
+	 *
+	 * FormData keeps the multipart/form-data encoding the forms declare, which is what
+	 * WebServer::_parseForm on the ESP side expects.
+	 */
+	postForm: function(formId, whatChanged, afterDone)
+	{
+		var form = document.getElementById(formId);
+		if (!form)
+		{
+			console.log("postForm: no form " + formId);
+			return;
+		}
+
+		var action = form.getAttribute('action') || '';
+		if (action.charAt(0) !== '/') action = '/' + action;
+
+		var xmlhttp = new XMLHttpRequest();
+
+		xmlhttp.onload = function()
+		{
+			modal.emptyModal('small');
+			if ( this.status >= 200 && this.status < 300 )
+			{
+				modal.appendToModal('small', '<p>' + whatChanged + ' saved.</p>');
+				if ( afterDone ) afterDone();
+			}
+			else
+			{
+				// handleSettings answers 400 with the reason in the body
+				modal.appendToModal('small', '<p class="error">' + (this.responseText || ('HTTP ' + this.status)) + '</p>');
+			}
+			modal.showModal('small');
+			setTimeout(function() { modal.hideModal('small'); }, 3000);
+		};
+
+		xmlhttp.onerror = function()
+		{
+			modal.emptyModal('small');
+			modal.appendToModal('small', '<p class="error">No reply from the ESP.</p>');
+			modal.showModal('small');
+		};
+
+		xmlhttp.open("POST", action, true);
+		xmlhttp.send(new FormData(form));
+	},
+
+	/** @brief called by settings.html */
+	settingsForm: function(formId)
+	{
+		ui.postForm(formId, 'Settings', settings.populateSettingsTab);
+	},
+
+	/** @brief called by wifi.html; kept under the upstream name because that markup
+	 *  lives in SPIFFS and may be older than this script. */
+	wifiStationForm: function(formId)
+	{
+		ui.postForm(formId, 'WiFi settings');
+	},
+
 	/** @brief Show notification bar */
 	showCommunicationErrorBar: function() {
 		document.getElementById('communication-error-bar').style.display = 'block';

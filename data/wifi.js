@@ -1,8 +1,19 @@
 var wifi = {
 
+	/** @brief WPA2 needs at least 8 characters; an empty field means "leave it alone".
+	 *  Upstream indexed #apsubmit unconditionally, but that element is commented out in
+	 *  wifi.html, so every keystroke in the AP password field threw a TypeError. */
 	wifiValidatePasswordLength: function(pw)
 	{
-		document.getElementById("apsubmit").disabled = pw.length < 8;
+		var btn = document.getElementById("apsubmit");
+		if (!btn) return;
+		btn.disabled = pw.length > 0 && pw.length < 8;
+	},
+
+	/** @brief called by wifi.html for the station form */
+	wifiStationForm: function(formId)
+	{
+		ui.postForm(formId, 'WiFi settings');
 	},
 
 	populateWiFiTab: function()

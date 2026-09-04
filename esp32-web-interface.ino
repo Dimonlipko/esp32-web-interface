@@ -120,7 +120,12 @@ bool handleFileRead(String path){
     if(SPIFFS.exists(pathWithGz))
       path += ".gz";
     File file = SPIFFS.open(path, "r");
-    server.sendHeader("Cache-Control", "max-age=86400");
+    // SPIFFS не віддає ні ETag, ні Last-Modified, тож "max-age=86400" на всьому
+    // означало, що після ./upload.sh браузер ще добу крутить стару веб-морду —
+    // свіжий index.html поруч зі старим ui.js виглядає саме як "сторінка не працює".
+    // Незмінні сторонні блоби лишаємо в кеші, свої файли завжди перепитуємо.
+    bool cacheable = path.endsWith(".gz") || path.endsWith(".png") || path.endsWith(".gif");
+    server.sendHeader("Cache-Control", cacheable ? "max-age=86400" : "no-cache");
     server.streamFile(file, contentType);
     file.close();
     return true;
@@ -341,6 +346,7 @@ static void handleSettings()
     html.replace("%claraTXPin%", config.getClaraTXPin() < 0 ? "" : String(config.getClaraTXPin()).c_str());
     html.replace("%claraBaud%", String(config.getClaraBaud()).c_str());
 
+    server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/html", html);
     updated = false;
   }
@@ -387,7 +393,24 @@ static void handleWifi()
   bool updated = true;
   if(server.hasArg("apSSID") && server.hasArg("apPW"))
   {
-    WiFi.softAP(server.arg("apSSID").c_str(), server.arg("apPW").c_str());
+    String apSSID = server.arg("apSSID");
+    String apPW = server.arg("apPW");
+
+    // WPA2 вимагає щонайменше 8 символів. Коротший пароль softAP() відкидає, а
+    // порожній піднімає точку доступу відкритою — на машині це не те, що хочеться
+    // отримати випадково, тому не вгадуємо намір, а відмовляємо.
+    if (apSSID.length() == 0)
+    {
+      server.send(400, "text/plain", "AP SSID must not be empty");
+      return;
+    }
+    if (apPW.length() < 8)
+    {
+      server.send(400, "text/plain", "AP password must be at least 8 characters");
+      return;
+    }
+
+    WiFi.softAP(apSSID.c_str(), apPW.c_str());
   }
   else if(server.hasArg("staSSID") && server.hasArg("staPW"))
   {
@@ -402,6 +425,7 @@ static void handleWifi()
     html.replace("%staSSID%", WiFi.SSID());
     html.replace("%apSSID%", WiFi.softAPSSID());
     html.replace("%staIP%", WiFi.localIP().toString());
+    server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/html", html);
     updated = false;
   }
