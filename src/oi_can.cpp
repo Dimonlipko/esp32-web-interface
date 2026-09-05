@@ -665,7 +665,12 @@ static bool installDriver(bool acceptAll) {
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
         .tx_queue_len = 30,
-        .rx_queue_len = 30,
+        // Зі знятим фільтром на шину 500k прилітає під дві тисячі кадрів на
+        // секунду, а черги на 30 вистачає лише на 15 мс. Рівно стільки триває
+        // віддача JSON у веб — і за цей час черга переповнюється, викидаючи
+        // разом із чужими кадрами й відповідь інвертора на SDO. Звідси
+        // «Communication problem» саме під час моніторингу.
+        .rx_queue_len = (uint32_t)(acceptAll ? 256 : 30),
         .alerts_enabled = TWAI_ALERT_NONE,
         .clkout_divider = 0,
         .intr_flags = 0
@@ -730,7 +735,15 @@ void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
 void SetBusMonitor(bool on) {
   if (on == CanMonitor::IsEnabled()) return;
   CanMonitor::SetEnabled(on);
-  if (_txPin >= 0) installDriver(on);
+  if (_txPin < 0) return;
+
+  if (!installDriver(on) && on) {
+    // Черга на 256 кадрів могла не влізти в купу. Монітор — річ другорядна,
+    // лишитись зовсім без CAN через нього не можна, тому відкочуємось.
+    DBG_OUTPUT_PORT.println("CAN: monitor mode failed, falling back");
+    CanMonitor::SetEnabled(false);
+    installDriver(false);
+  }
 }
 
 void Loop() {
@@ -740,7 +753,9 @@ void Loop() {
   // Вичерпуємо чергу пачкою: з увімкненим монітором фільтр знято, і по кадру
   // за виклик ми б не встигали. Бюджет обмежений, щоб один прохід loop() не
   // затягнувся й не заморозив веб-сервер.
-  int budget = 16;
+  // У режимі монітора вичерпуємо агресивніше — інакше черга росте швидше,
+  // ніж ми її розбираємо.
+  int budget = CanMonitor::IsEnabled() ? 64 : 16;
   while (budget-- > 0 && twai_receive(&rxframe, 0) == ESP_OK) {
     CanMonitor::Push(&rxframe);
 

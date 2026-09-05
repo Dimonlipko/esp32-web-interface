@@ -38,6 +38,13 @@ static uint32_t partialSince = 0;
 
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
+// Черга подій драйвера: із неї видно помилки кадрування. Це єдиний спосіб
+// відрізнити «лінія шумить або швидкість не та» від «дані справжні, просто
+// двійкові»: у першому випадку лічильник біжить, у другому лишається нулем.
+static QueueHandle_t evtQueue = NULL;
+static uint32_t frameErrors = 0;
+static uint32_t overruns = 0;
+
 static void pushLine(const char* text) {
   char line[CLARA_LINE_LEN];
   uint32_t ms = millis();
@@ -72,6 +79,7 @@ static void flushPartial() {
 void Init(int rxPin, int txPin, uint32_t baud) {
   if (running) {
     uart_driver_delete(CLARA_PORT);
+    evtQueue = NULL;              // чергу знищує сам драйвер
     running = false;
   }
 
@@ -85,7 +93,9 @@ void Init(int rxPin, int txPin, uint32_t baud) {
   cfg.flow_ctrl  = UART_HW_FLOWCTRL_DISABLE;
   cfg.source_clk = UART_SCLK_DEFAULT;
 
-  if (uart_driver_install(CLARA_PORT, CLARA_RX_BUF, CLARA_TX_BUF, 0, NULL, 0) != ESP_OK)
+  frameErrors = 0;
+  overruns = 0;
+  if (uart_driver_install(CLARA_PORT, CLARA_RX_BUF, CLARA_TX_BUF, 20, &evtQueue, 0) != ESP_OK)
     return;
   if (uart_param_config(CLARA_PORT, &cfg) != ESP_OK) {
     uart_driver_delete(CLARA_PORT);
@@ -108,6 +118,14 @@ void Init(int rxPin, int txPin, uint32_t baud) {
 
 void Loop() {
   if (!running) return;
+
+  // Чергу подій треба вичерпувати, інакше вона заповнюється й драйвер починає
+  // губити події. Заразом рахуємо биті кадри.
+  uart_event_t ev;
+  while (evtQueue && xQueueReceive(evtQueue, &ev, 0) == pdTRUE) {
+    if (ev.type == UART_FRAME_ERR || ev.type == UART_PARITY_ERR) frameErrors++;
+    else if (ev.type == UART_FIFO_OVF || ev.type == UART_BUFFER_FULL) overruns++;
+  }
 
   uint8_t buf[128];
   int len = uart_read_bytes(CLARA_PORT, buf, sizeof(buf), 0);
@@ -142,6 +160,8 @@ void Clear() {
   head = 0;
   taskEXIT_CRITICAL(&mux);
   partialLen = 0;
+  frameErrors = 0;
+  overruns = 0;
 }
 
 size_t Json(uint32_t since, char* out, size_t cap) {
@@ -155,8 +175,10 @@ size_t Json(uint32_t since, char* out, size_t cap) {
   if (since < oldest) { lost = oldest - since; since = oldest; }
   if (since > h) since = h;   // буфер чистили — читач попереду
 
-  size_t pos = snprintf(out, cap, "{\"head\":%lu,\"lost\":%lu,\"run\":%d,\"lines\":[",
-                        (unsigned long)h, (unsigned long)lost, running ? 1 : 0);
+  size_t pos = snprintf(out, cap,
+                        "{\"head\":%lu,\"lost\":%lu,\"run\":%d,\"baud\":%lu,\"ferr\":%lu,\"ovf\":%lu,\"lines\":[",
+                        (unsigned long)h, (unsigned long)lost, running ? 1 : 0, (unsigned long)baudRate,
+                        (unsigned long)frameErrors, (unsigned long)overruns);
 
   for (uint32_t s = since; s < h && pos < cap - 8; s++) {
     if (s != since && pos < cap - 2) out[pos++] = ',';

@@ -72,12 +72,21 @@ var theme = {
 		// показувала б стан, застиглий з моменту виходу з вкладки. Запит із
 		// завідомо великим since сервер обрізає до head і повертає порожній
 		// список — це кілька десятків байтів раз на 5 с.
+		var claraMisses = 0;
 		setInterval(function() {
 			if (window.clara && clara.timer) return;   // вкладка відкрита, там свій опит
 			var xhr = new XMLHttpRequest();
 			xhr.onreadystatechange = function() {
 				if (xhr.readyState !== 4) return;
-				if (xhr.status !== 200) return theme.setLight('st-clara', 'error', 'Clara: no link');
+				// Один пропущений запит — це не «немає звʼязку». Під час
+				// моніторингу шини ESP зайнятий, і поодинокі промахи нормальні;
+				// червоне вмикаємо лише після двох поспіль, як це вже робить
+				// індикатор CAN.
+				if (xhr.status !== 200) {
+					if (++claraMisses >= 2) theme.setLight('st-clara', 'error', 'Clara: no link');
+					return;
+				}
+				claraMisses = 0;
 				var r;
 				try { r = JSON.parse(xhr.responseText); } catch (e) { return; }
 				theme.setLight('st-clara', r.run ? 'ok' : '', r.run ? 'Clara UART' : 'Clara: off');

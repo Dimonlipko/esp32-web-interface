@@ -72,6 +72,17 @@ var clara = {
 				theme.setLight('st-clara', r.lines.length ? 'warn' : 'ok', 'Clara UART');
 			}
 
+			var st = document.getElementById('clara-status');
+			if (st) {
+				var line = (r.run ? 'listening at ' + (r.baud || '') : 'off') + ' · ' + r.head + ' lines';
+				// Помилки кадрування — це відповідь на питання «це справжні дані?».
+				// Ідуть — значить лінія шумить або швидкість не та. Нуль при
+				// нечитабельних байтах — значить дані справжні, просто двійкові.
+				if (r.ferr) line += ' · ' + r.ferr + ' framing errors — noise on the line, or the wrong baud rate';
+				if (r.ovf) line += ' · ' + r.ovf + ' overruns';
+				st.textContent = line;
+			}
+
 			if (r.lost > 0)
 				clara.append('--- ' + r.lost + ' lines missed ---', 'lost');
 
