@@ -69,11 +69,6 @@
 #define LED_ON   LOW
 #define LED_OFF  HIGH
 
-// Точку доступу заводить лише handleWifi(), тобто сторінка, до якої без точки
-// доступу не дістатись. На чистому NVS це замкнене коло, і пристрою просто
-// нема в ефірі. Тому якщо AP не налаштована — піднімаємо запасну.
-#define DEFAULT_AP_SSID  "inverter"
-#define DEFAULT_AP_PW    "openinverter"
 
 
 const char* host = "inverter";
@@ -463,6 +458,8 @@ static void handleWifi()
       return;
     }
 
+    config.setAp(apSSID.c_str(), apPW.c_str());
+    config.saveSettings();
     WiFi.softAP(apSSID.c_str(), apPW.c_str());
   }
   else if(server.hasArg("staSSID") && server.hasArg("staPW"))
@@ -476,7 +473,7 @@ static void handleWifi()
     String html = file.readString();
     file.close();
     html.replace("%staSSID%", WiFi.SSID());
-    html.replace("%apSSID%", WiFi.softAPSSID());
+    html.replace("%apSSID%", config.getApSSID());
     html.replace("%staIP%", WiFi.localIP().toString());
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/html", html);
@@ -568,6 +565,8 @@ void setup(void){
   else if (!SPIFFS.exists("/index.html"))
     DBG_OUTPUT_PORT.println("SPIFFS: mounted but empty - run 'pio run -t uploadfs'");
 
+  config.load();
+
   //WIFI INIT
   #ifdef WIFI_IS_OFF_AT_BOOT
     enableWiFiAtBootTime();
@@ -578,8 +577,11 @@ void setup(void){
   WiFi.setTxPower(WIFI_POWER_19_5dBm);//25); //dbm
   WiFi.begin();
 
-  if (WiFi.softAPSSID().length() == 0)
-    WiFi.softAP(DEFAULT_AP_SSID, DEFAULT_AP_PW);
+  // Перевірка на порожній softAPSSID() не працює: після WiFi.mode(WIFI_AP_STA)
+  // ядро вже підставило туди ESP_<MAC>, тож умова ніколи не спрацьовувала, і
+  // точка піднімалась дефолтною та ВІДКРИТОЮ. Тому ім'я з паролем тримаємо у
+  // власному конфігу й застосовуємо їх беззастережно.
+  WiFi.softAP(config.getApSSID(), config.getApPW());
 
   DBG_OUTPUT_PORT.printf("\r\nAP  : \"%s\" at %s\r\nSTA : \"%s\"\r\nheap: %u\r\n",
                          WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str(),
@@ -588,8 +590,6 @@ void setup(void){
   sta_tick.attach(10, staCheck);
 
   MDNS.begin(host);
-
-  config.load();
 
   if (config.getCanEnablePin() > 0) {
     pinMode(config.getCanEnablePin(), OUTPUT);

@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define EEPROM_VERSION 3
+#define EEPROM_VERSION 4
 typedef struct {
     int version;
     int canRXPin;
@@ -10,6 +10,8 @@ typedef struct {
     int claraRXPin;
     int claraTXPin;      // -1 = слухаємо Клару, але нічого їй не шлемо
     int claraBaud;       // 0 = монітор вимкнено
+    char apSSID[33];     // 32 символи SSID + \0
+    char apPW[65];       // 64 символи WPA2 + \0
 } EEPROMSettings;
 
 
@@ -36,6 +38,10 @@ class Config
 
     int getClaraBaud();
     void setClaraBaud(int baud);
+
+    const char* getApSSID();
+    const char* getApPW();
+    void setAp(const char* ssid, const char* pw);
 
     void saveSettings();
 

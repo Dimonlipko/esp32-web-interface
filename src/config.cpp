@@ -1,5 +1,6 @@
 #include "config.h"
 #include <EEPROM.h>
+#include <string.h>
 Config::Config() {
 }
 
@@ -20,6 +21,8 @@ void Config::load() {
         settings.claraRXPin = GPIO_NUM_10;   // піни LIN виведені на розʼєм UART
         settings.claraTXPin = GPIO_NUM_9;
         settings.claraBaud = 115200;         // термінал ccs32clara, UART4 8N1
+        strncpy(settings.apSSID, "inverter", sizeof(settings.apSSID) - 1);
+        strncpy(settings.apPW, "openinverter", sizeof(settings.apPW) - 1);
         saveSettings();
     }
 
@@ -32,6 +35,29 @@ void Config::load() {
     if (!isValidPin(settings.claraRXPin)) settings.claraBaud = 0;
     if (settings.claraTXPin >= 0 && !isValidPin(settings.claraTXPin))
         settings.claraTXPin = -1;
+
+    // Сміття в NVS не має поїхати в softAP() як рядок без термінатора.
+    settings.apSSID[sizeof(settings.apSSID) - 1] = '\0';
+    settings.apPW[sizeof(settings.apPW) - 1] = '\0';
+    if (settings.apSSID[0] == '\0')
+        strncpy(settings.apSSID, "inverter", sizeof(settings.apSSID) - 1);
+    if (strlen(settings.apPW) < 8)
+        strncpy(settings.apPW, "openinverter", sizeof(settings.apPW) - 1);
+}
+
+const char* Config::getApSSID() {
+    return settings.apSSID;
+}
+
+const char* Config::getApPW() {
+    return settings.apPW;
+}
+
+void Config::setAp(const char* ssid, const char* pw) {
+    strncpy(settings.apSSID, ssid, sizeof(settings.apSSID) - 1);
+    settings.apSSID[sizeof(settings.apSSID) - 1] = '\0';
+    strncpy(settings.apPW, pw, sizeof(settings.apPW) - 1);
+    settings.apPW[sizeof(settings.apPW) - 1] = '\0';
 }
 int Config::getCanRXPin() {
     return settings.canRXPin;
