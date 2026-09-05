@@ -162,6 +162,9 @@ a:visited { color: var(--accent-hover); }
 }
 #version p { font-size: 11px; padding: 0; margin: 0; color: var(--text-sidebar-title); }
 .control { margin: 10px; color: var(--text-sidebar); font-size: .85em; }
+/* Перемикач і його підпис стояли впритул. */
+#auto-reload-toggle-div { display: flex; align-items: center; gap: 12px; }
+#auto-reload-toggle-div p { margin: 0; }
 .control label { color: var(--text-sidebar-title); }
 #nodeid-div input, #nodeid-div select {
     width: 100%;
@@ -478,6 +481,51 @@ tbody tr:hover, tr:hover { background-color: var(--bg-row-hover); }
 .clara-bar { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 #clara-input { flex: 1 1 auto; }
 .clara-hint { color: var(--text-muted); font-size: .85em; }
+
+/* --- монітор шини -------------------------------------------------------- */
+#canmon { flex-direction: column; align-items: stretch; }
+.canmon-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.canmon-bar label { font-size: .9em; }
+.canmon-bar input { width: 80px; }
+/* сегментований перемикач вигляду: дві кнопки як одна */
+.seg { display: inline-flex; }
+.seg button { margin: 0; border-radius: 0; }
+.seg button:first-child { border-radius: 4px 0 0 4px; }
+.seg button:last-child { border-radius: 0 4px 4px 0; margin-left: -1px; }
+.seg button.active {
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+#canmon-log {
+    width: 100%;
+    background-color: var(--bg-terminal);
+    color: var(--terminal-text);
+    border-radius: 6px;
+    padding: 10px;
+    height: 58vh;
+    min-height: 240px;
+    overflow-y: auto;
+    white-space: pre;
+    font-family: ui-monospace, Consolas, Monaco, 'Courier New', monospace;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+#canmon-table { width: 100%; }
+#canmon-table td { font-variant-numeric: tabular-nums; }
+
+/* --- результати пошуку мереж --------------------------------------------- */
+.scan-table { width: auto; min-width: 320px; margin: 6px 0 14px; }
+.scan-table td { padding: 5px 14px 5px 0; border-bottom: 1px solid var(--border-light); }
+.scan-table a { font-weight: 600; }
+
+[hidden] { display: none !important; }
 
 /* --- вузький екран ------------------------------------------------------ */
 @media only screen and (max-width: 1000px) {

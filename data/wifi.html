@@ -30,6 +30,13 @@
     <h2>Station Settings</h2>
     Here you can specify a Wifi network that the inverter joins.
     <form id="wifiClientForm" enctype="multipart/form-data" action="wifi" method="POST">
+        <p>
+            <button type="button" id="wifiScanBtn" onclick="wifi.scan();">
+                <img class="buttonimg" src="/icon-check-circle.png">Scan for networks</button>
+            <span class="clara-hint">під час сканування звʼязок із точкою доступу ESP може на секунду завмерти</span>
+        </p>
+        <div id="wifiScanResults"></div>
+
         <p><label for="staSSID">Network SSID: </label><input id="staSSID" name="staSSID" type="text" value="%staSSID%"/></p>
         <p><label for="staPW">WPA2 Password: </label><input id="staPW" name="staPW" type="text" /></p>
         Current IP Address: %staIP%

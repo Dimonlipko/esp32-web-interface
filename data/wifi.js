@@ -16,6 +16,92 @@ var wifi = {
 		ui.postForm(formId, 'WiFi settings');
 	},
 
+	/** @brief запускає пошук мереж і опитує ESP, доки скан не завершиться.
+	 *  Сам скан на пристрої асинхронний, тому тут просте опитування. */
+	scan: function()
+	{
+		var btn = document.getElementById('wifiScanBtn');
+		if (btn) btn.disabled = true;
+		wifi.scanStatus('Шукаю мережі…');
+		wifi.pollScan(0);
+	},
+
+	scanStatus: function(text, isError)
+	{
+		var box = document.getElementById('wifiScanResults');
+		if (!box) return;
+		box.innerHTML = '';
+		var p = document.createElement('p');
+		p.className = isError ? 'error' : 'clara-hint';
+		p.textContent = text;
+		box.appendChild(p);
+	},
+
+	pollScan: function(tries)
+	{
+		var xhr = new XMLHttpRequest();
+		xhr.onload = function()
+		{
+			var r;
+			try { r = JSON.parse(this.responseText); }
+			catch (e) { return wifi.scanDone(null, 'ESP відповів не тим'); }
+
+			if (r.state === 'scanning')
+			{
+				// скан на ESP32 займає 2–4 с; 20 спроб по 700 мс з великим запасом
+				if (tries > 20) return wifi.scanDone(null, 'скан не завершився');
+				setTimeout(function() { wifi.pollScan(tries + 1); }, 700);
+				return;
+			}
+			wifi.scanDone(r.networks || [], null);
+		};
+		xhr.onerror = function() { wifi.scanDone(null, 'немає відповіді від ESP'); };
+		xhr.open('GET', '/wifi/scan', true);
+		xhr.send();
+	},
+
+	scanDone: function(networks, error)
+	{
+		var btn = document.getElementById('wifiScanBtn');
+		if (btn) btn.disabled = false;
+
+		if (error) return wifi.scanStatus(error, true);
+		if (!networks.length) return wifi.scanStatus('Нічого не знайдено');
+
+		networks.sort(function(a, b) { return b.rssi - a.rssi; });
+
+		var box = document.getElementById('wifiScanResults');
+		box.innerHTML = '';
+		var table = document.createElement('table');
+		table.className = 'scan-table';
+
+		for (var i = 0; i < networks.length; i++)
+		{
+			var n = networks[i];
+			var tr = table.insertRow(-1);
+
+			// SSID кладемо текстовою нодою, а не в innerHTML: ім'я мережі
+			// приходить із ефіру й може містити що завгодно.
+			var name = tr.insertCell(-1);
+			var a = document.createElement('a');
+			a.href = '#';
+			a.textContent = n.ssid || '(прихована)';
+			a.onclick = (function(ssid) {
+				return function(e) {
+					e.preventDefault();
+					document.getElementById('staSSID').value = ssid;
+					document.getElementById('staPW').focus();
+					return false;
+				};
+			})(n.ssid);
+			name.appendChild(a);
+
+			tr.insertCell(-1).textContent = n.open ? 'відкрита' : 'WPA';
+			tr.insertCell(-1).textContent = n.rssi + ' dBm';
+		}
+		box.appendChild(table);
+	},
+
 	populateWiFiTab: function()
 	{
 		var wifiTab = document.getElementById("wifi");

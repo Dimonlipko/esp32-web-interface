@@ -55,6 +55,7 @@
 #include <time.h>
 #include "src/oi_can.h"
 #include "src/clara_uart.h"
+#include "src/can_monitor.h"
 #include "src/config.h"
 
 #define DBG_OUTPUT_PORT Serial
@@ -75,8 +76,10 @@ Ticker sta_tick;
 
 Config config;
 
-// Буфер під JSON терміналу: 128 рядків по 80 символів плюс лапки й коми.
-static char termBuf[12288];
+// Спільний буфер відповіді для /api/term і /api/canmon. WebServer обробляє
+// один запит за раз у loop(), тож ділити його безпечно, а 12 КБ на кожного
+// окремо на C3 шкода.
+static char jsonBuf[12288];
 
 
 
@@ -367,11 +370,11 @@ static void handleSettings()
 static void handleTermGet()
 {
   uint32_t since = server.hasArg("since") ? strtoul(server.arg("since").c_str(), NULL, 10) : 0;
-  size_t len = ClaraUart::Json(since, termBuf, sizeof(termBuf));
+  size_t len = ClaraUart::Json(since, jsonBuf, sizeof(jsonBuf));
   // Через setContentLength/sendContent, щоб не копіювати 12 КБ у String.
   server.setContentLength(len);
   server.send(200, "application/json", "");
-  server.sendContent(termBuf, len);
+  server.sendContent(jsonBuf, len);
 }
 
 /** @brief шле рядок у термінал Клари; cmd=clear чистить буфер локально. */
@@ -387,6 +390,41 @@ static void handleTermPost()
   }
 
   ClaraUart::Send(server.arg("cmd").c_str());
+  server.send(200, "text/plain", "OK");
+}
+
+
+/** @brief віддає кадри, новіші за since. Стан тримає клієнт, не сервер. */
+static void handleCanMonGet()
+{
+  uint32_t since = server.hasArg("since") ? strtoul(server.arg("since").c_str(), NULL, 10) : 0;
+  size_t len = CanMonitor::Json(since, jsonBuf, sizeof(jsonBuf));
+  server.setContentLength(len);
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", "");
+  server.sendContent(jsonBuf, len);
+}
+
+/** @brief on=0|1 перемикає прийом усіх кадрів, clear=1 чистить кільце,
+ *  id/mask (hex) — програмний фільтр поверх апаратного. */
+static void handleCanMonPost()
+{
+  if (server.hasArg("id") || server.hasArg("mask"))
+  {
+    uint32_t id = strtoul(server.arg("id").c_str(), NULL, 16);
+    uint32_t mask = strtoul(server.arg("mask").c_str(), NULL, 16);
+    CanMonitor::SetFilter(id, mask);
+  }
+
+  if (server.hasArg("on"))
+  {
+    // Знімає апаратний фільтр і перевстановлює драйвер — SDO-клієнт лишається
+    // у своєму стані, платимо лише кількома кадрами під час перемикання.
+    OICan::SetBusMonitor(server.arg("on") != "0");
+  }
+
+  if (server.hasArg("clear")) CanMonitor::Clear();
+
   server.send(200, "text/plain", "OK");
 }
 
@@ -439,6 +477,44 @@ static void handleWifi()
     server.streamFile(file, getContentType("wifi-updated.html"));
     file.close();
   }
+}
+
+
+/** @brief пошук мереж. Скан асинхронний: перший запит його стартує, наступні
+ *  відповідають "scanning", доки не з'явиться результат. Синхронний
+ *  WiFi.scanNetworks() блокував би loop() на кілька секунд, а разом із ним
+ *  веб-сервер і розбір черги CAN. */
+static void handleWifiScan()
+{
+  int n = WiFi.scanComplete();
+
+  if (n == WIFI_SCAN_RUNNING)
+  {
+    server.send(200, "application/json", "{\"state\":\"scanning\"}");
+    return;
+  }
+  if (n == WIFI_SCAN_FAILED)
+  {
+    WiFi.scanNetworks(true);          // true = асинхронно
+    server.send(200, "application/json", "{\"state\":\"scanning\"}");
+    return;
+  }
+
+  String out = "{\"state\":\"done\",\"networks\":[";
+  for (int i = 0; i < n; i++)
+  {
+    if (i) out += ',';
+    String ssid = WiFi.SSID(i);
+    ssid.replace("\\", "\\\\");
+    ssid.replace("\"", "\\\"");
+    out += "{\"ssid\":\"" + ssid + "\",\"rssi\":" + String(WiFi.RSSI(i)) +
+           ",\"open\":" + (WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "1" : "0") + "}";
+  }
+  out += "]}";
+
+  WiFi.scanDelete();                  // наступний запит почне новий скан
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", out);
 }
 
 
@@ -507,6 +583,7 @@ void setup(void){
   server.on("/edit", HTTP_POST, [](){ server.send(200, "text/plain", ""); }, handleFileUpload);
 
   server.on("/wifi", handleWifi);
+  server.on("/wifi/scan", HTTP_GET, handleWifiScan);
   server.on("/cmd", handleCommand);
   server.on("/canmap", handleCanMap);
   server.on("/fwupdate", handleUpdate);
@@ -516,6 +593,8 @@ void setup(void){
   server.on("/settings", handleSettings);
   server.on("/api/term", HTTP_GET, handleTermGet);
   server.on("/api/term", HTTP_POST, handleTermPost);
+  server.on("/api/canmon", HTTP_GET, handleCanMonGet);
+  server.on("/api/canmon", HTTP_POST, handleCanMonPost);
 
   //called when the url is not defined here
   //use it to load content from SPIFFS

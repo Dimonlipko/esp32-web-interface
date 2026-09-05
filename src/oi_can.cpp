@@ -19,6 +19,7 @@
  */
 #include "driver/gpio.h"
 #include "driver/twai.h"
+#include "can_monitor.h"
 #include <FS.h>
 #include <SPIFFS.h>
 #include <StreamUtils.h>
@@ -652,11 +653,15 @@ BaudRate GetBaudRate() {
   return baudRate;
 }
 
-void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
+// Піни й швидкість тримаємо, щоб перевстановити драйвер із іншим фільтром,
+// не зачіпаючи стану SDO-клієнта.
+static int _txPin = -1, _rxPin = -1;
+
+static bool installDriver(bool acceptAll) {
   twai_general_config_t g_config = {
         .mode = TWAI_MODE_NORMAL,
-        .tx_io = static_cast<gpio_num_t>(txPin),
-        .rx_io = static_cast<gpio_num_t>(rxPin),
+        .tx_io = static_cast<gpio_num_t>(_txPin),
+        .rx_io = static_cast<gpio_num_t>(_rxPin),
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
         .tx_queue_len = 30,
@@ -666,15 +671,14 @@ void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
         .intr_flags = 0
   };
 
-  uint16_t id = 0x580 + nodeId;
+  uint16_t id = 0x580 + _nodeId;
 
   twai_stop();
   twai_driver_uninstall();
 
   twai_timing_config_t t_config;
-  baudRate = baud;
 
-  switch (baud)
+  switch (baudRate)
   {
   case Baud125k:
     t_config = TWAI_TIMING_CONFIG_125KBITS();
@@ -687,44 +691,68 @@ void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
     break;
   }
 
-  twai_filter_config_t f_config = {.acceptance_code = (uint32_t)(id << 5) | (uint32_t)(0x7de << 21),
+  // Звичайний режим — апаратний фільтр на 0x580+nodeId і 0x7DE. Для монітора
+  // шини потрібно все, тому фільтр знімається; черга прийому тоді набирає
+  // увесь трафік, і саме тому монітор вмикається окремо.
+  twai_filter_config_t accept_all = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  twai_filter_config_t sdo_only = {.acceptance_code = (uint32_t)(id << 5) | (uint32_t)(0x7de << 21),
                                    .acceptance_mask = 0x001F001F,
                                    .single_filter = false};
+  twai_filter_config_t f_config = acceptAll ? accept_all : sdo_only;
 
-  if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
-     printf("Driver installed\n");
-  } else {
-     printf("Failed to install driver\n");
-     return;
+  if (twai_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
+     DBG_OUTPUT_PORT.println("Failed to install CAN driver");
+     return false;
   }
 
-  // Start TWAI driver
-  if (twai_start() == ESP_OK) {
-    printf("Driver started\n");
-  } else {
-    printf("Failed to start driver\n");
-    return;
+  if (twai_start() != ESP_OK) {
+    DBG_OUTPUT_PORT.println("Failed to start CAN driver");
+    return false;
   }
+  return true;
+}
 
+void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin) {
+  _txPin = txPin;
+  _rxPin = rxPin;
   _nodeId = nodeId;
+  baudRate = baud;
+
+  if (!installDriver(CanMonitor::IsEnabled())) return;
+
   state = OBTAINSERIAL;
   requestSdoElement(SDO_INDEX_SERIAL, 0);
   DBG_OUTPUT_PORT.println("Initialized CAN");
+}
+
+/** @brief вмикає/вимикає прийом усіх кадрів. Стан SDO-клієнта не чіпаємо —
+ *  перевстановлення драйвера коштує кількох втрачених кадрів, не більше. */
+void SetBusMonitor(bool on) {
+  if (on == CanMonitor::IsEnabled()) return;
+  CanMonitor::SetEnabled(on);
+  if (_txPin >= 0) installDriver(on);
 }
 
 void Loop() {
   bool recvdResponse = false;
   twai_message_t rxframe;
 
-  if (twai_receive(&rxframe, 0) == ESP_OK) {
+  // Вичерпуємо чергу пачкою: з увімкненим монітором фільтр знято, і по кадру
+  // за виклик ми б не встигали. Бюджет обмежений, щоб один прохід loop() не
+  // затягнувся й не заморозив веб-сервер.
+  int budget = 16;
+  while (budget-- > 0 && twai_receive(&rxframe, 0) == ESP_OK) {
+    CanMonitor::Push(&rxframe);
+
     if (rxframe.identifier == (0x580 | _nodeId)) {
       handleSdoResponse(&rxframe);
       recvdResponse = true;
     }
-    else if (rxframe.identifier == 0x7de)
+    else if (rxframe.identifier == 0x7de) {
       handleUpdate(&rxframe);
-    else
-      DBG_OUTPUT_PORT.printf("Received unwanted frame %" PRIu32 "\r\n", rxframe.identifier);
+    }
+    // Раніше тут був друк кожного чужого кадру. З монітора шини це стало
+    // джерелом флуду в консоль, а видно їх тепер на вкладці CAN monitor.
   }
 
   if (updstate == REQUEST_JSON) {

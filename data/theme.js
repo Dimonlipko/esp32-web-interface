@@ -55,12 +55,36 @@ var theme = {
 				for (var i = 0; i < links.length; i++) links[i].classList.remove('active');
 				if (elmnt) elmnt.classList.add('active');
 
-				// Термінал опитує пристрій, тож крутимо його лише на своїй вкладці.
+				// Термінал і монітор шини опитують пристрій, тож крутимо їх лише
+				// на своїй вкладці.
 				if (window.clara) {
 					if (pageName === 'clara') clara.start(); else clara.stop();
 				}
+				if (window.canmon) {
+					if (pageName === 'canmon') { if (canmon.timer) canmon.start(); }
+					else canmon.stop();
+				}
 			};
 		}
+
+		// --- лампа Клари має бути чесною й поза своєю вкладкою ---------------
+		// clara.poll() працює лише коли відкрито термінал, тож без цього лампа
+		// показувала б стан, застиглий з моменту виходу з вкладки. Запит із
+		// завідомо великим since сервер обрізає до head і повертає порожній
+		// список — це кілька десятків байтів раз на 5 с.
+		setInterval(function() {
+			if (window.clara && clara.timer) return;   // вкладка відкрита, там свій опит
+			var xhr = new XMLHttpRequest();
+			xhr.onreadystatechange = function() {
+				if (xhr.readyState !== 4) return;
+				if (xhr.status !== 200) return theme.setLight('st-clara', 'error', 'Clara: no link');
+				var r;
+				try { r = JSON.parse(xhr.responseText); } catch (e) { return; }
+				theme.setLight('st-clara', r.run ? 'ok' : '', r.run ? 'Clara UART' : 'Clara: off');
+			};
+			xhr.open('GET', '/api/term?since=4294967295', true);
+			xhr.send();
+		}, 5000);
 
 		// --- згорнутий сайдбар: ховаємо підписи, а не обрізаємо їх -----------
 		if (window.ui && ui.shrinkNavbar) {

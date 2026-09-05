@@ -26,6 +26,7 @@ enum SetResult { Ok, UnknownIndex, ValueOutOfRange, CommError };
 enum BaudRate { Baud125k, Baud250k, Baud500k };
 
 void Init(uint8_t nodeId, BaudRate baud, int txPin, int rxPin);
+void SetBusMonitor(bool on);
 void Loop();
 bool SendJson(WiFiClient c);
 void SendCanMapping(WiFiClient c);
