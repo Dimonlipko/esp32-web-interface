@@ -116,16 +116,18 @@ bool handleFileRead(String path){
   //DBG_OUTPUT_PORT.println("handleFileRead: " + path);
   if(path.endsWith("/")) path += "index.html";
   String contentType = getContentType(path);
+  // Рахуємо ДО того, як до path допишеться ".gz": інакше досить залити gz-двійника
+  // власного файлу (handleFileRead підхоплює його для будь-чого), і /ui.js знову
+  // почне кешуватись на добу — рівно та несвіжість, від якої ми тікали.
+  // Кешуємо лише сторонні бандли й іконки, свої html/js/css завжди перепитуємо.
+  bool cacheable = path.endsWith(".min.js") || path.endsWith(".png") || path.endsWith(".gif");
   String pathWithGz = path + ".gz";
   if(SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)){
     if(SPIFFS.exists(pathWithGz))
       path += ".gz";
     File file = SPIFFS.open(path, "r");
     // SPIFFS не віддає ні ETag, ні Last-Modified, тож "max-age=86400" на всьому
-    // означало, що після ./upload.sh браузер ще добу крутить стару веб-морду —
-    // свіжий index.html поруч зі старим ui.js виглядає саме як "сторінка не працює".
-    // Незмінні сторонні блоби лишаємо в кеші, свої файли завжди перепитуємо.
-    bool cacheable = path.endsWith(".gz") || path.endsWith(".png") || path.endsWith(".gif");
+    // означало, що після ./upload.sh браузер ще добу крутить стару веб-морду.
     server.sendHeader("Cache-Control", cacheable ? "max-age=86400" : "no-cache");
     server.streamFile(file, contentType);
     file.close();

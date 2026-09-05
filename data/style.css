@@ -255,7 +255,10 @@ a:visited { color: var(--accent-hover); }
     background-color: transparent;
 }
 .main-content { order: 2; margin: 0; flex: 10 1 300px; min-width: 0; }
-.main-left    { order: 2; flex: 10 1 200px; margin-right: 10px; min-width: 0; overflow-y: auto; }
+.main-left    { order: 2; flex: 10 1 200px; margin-right: 10px; min-width: 0; }
+/* Без overflow: він робить із .main-left контейнер обрізання (overflow-y:auto
+   змушує overflow-x теж стати auto), і абсолютна підказка з .tooltiptext
+   ріжеться об його нижню межу. Прокручується сторінка цілком. */
 .main-right   { order: 3; flex: 0 0 15%; min-width: 200px; padding-top: 0; }
 /* Заголовки секцій у правій колонці інакше злипаються з кнопкою над ними. */
 .main-right h3 { margin-top: 22px; }
@@ -440,7 +443,10 @@ tbody tr:hover, tr:hover { background-color: var(--bg-row-hover); }
     border-radius: 6px;
     position: absolute;
     z-index: 800;
-    width: 260px;
+    /* по вмісту, але не ширше 360px — короткий опис не розтягується на три
+       рядки, довгий не лізе за край таблиці */
+    width: max-content;
+    max-width: 360px;
     left: 0; top: 125%;
     font-weight: 400;
     box-shadow: var(--shadow-md);
