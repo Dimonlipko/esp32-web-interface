@@ -62,6 +62,18 @@
 #ifndef LED_BUILTIN
 #define LED_BUILTIN  8
 #endif
+// На ESP32-C3 Super Mini світлодіод висить між 3V3 і GPIO8, тобто горить від
+// LOW. Раніше setup() робив pinMode(OUTPUT) і нічого не писав — пін лишався в
+// LOW, і плата світилась постійно, ніби щось зависло. А handleCommand() ще й
+// гасив його на час обміну, тобто рівно навпаки.
+#define LED_ON   LOW
+#define LED_OFF  HIGH
+
+// Точку доступу заводить лише handleWifi(), тобто сторінка, до якої без точки
+// доступу не дістатись. На чистому NVS це замкнене коло, і пристрою просто
+// нема в ефірі. Тому якщо AP не налаштована — піднімаємо запасну.
+#define DEFAULT_AP_SSID  "inverter"
+#define DEFAULT_AP_PW    "openinverter"
 
 
 const char* host = "inverter";
@@ -178,7 +190,7 @@ static void handleCommand() {
 
   String cmd = server.arg("cmd");
 
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
 
   if (cmd == "json") {
     if (!OICan::SendJson(server.client()))
@@ -227,11 +239,11 @@ static void handleCommand() {
     }
   }
 
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 }
 
 static void handleCanMap() {
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
   OICan::SetResult res = OICan::Ok;
 
   if (server.hasArg("add")) {
@@ -252,7 +264,7 @@ static void handleCanMap() {
     server.send(500, "text/plain", "CAN communication error");
   else if (res == OICan::UnknownIndex)
     server.send(500, "text/plain", "Invalid request");
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 }
 
 static void handleUpdate()
@@ -261,7 +273,7 @@ static void handleUpdate()
   if(!server.hasArg("step") || !server.hasArg("file")) {server.send(500, "text/plain", "BAD ARGS"); return;}
   int step = server.arg("step").toInt();
   String message;
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, LED_ON);
 
   if (step < 0)
     pages = OICan::StartUpdate(server.arg("file"));
@@ -272,7 +284,7 @@ static void handleUpdate()
   }
 
   server.send(200, "text/json", "{ \"message\": \"" + message + "\", \"pages\": " + pages + " }");
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 }
 
 static void handleNodeId()
@@ -530,6 +542,11 @@ void staCheck(){
   sta_tick.detach();
   if(!(uint32_t)WiFi.localIP()){
     WiFi.mode(WIFI_AP); //disable station mode
+    DBG_OUTPUT_PORT.println("STA : no IP, staying on the access point only");
+  }
+  else {
+    DBG_OUTPUT_PORT.printf("STA : joined \"%s\" as %s\r\n",
+                           WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
   }
 }
 
@@ -539,11 +556,17 @@ void setup(void){
   delay(100);
 
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LED_OFF);
 
  
 
-  //Start SPI Flash file system
-  SPIFFS.begin();
+  // formatOnFail: чистий розділ SPIFFS не монтується взагалі (-10025,
+  // SPIFFS_ERR_NOT_A_FS), а без змонтованої ФС не працює й /edit — залити
+  // веб-морду стає нічим. Порожня файлова система краща за жодної.
+  if (!SPIFFS.begin(true))
+    DBG_OUTPUT_PORT.println("SPIFFS: mount failed even after formatting");
+  else if (!SPIFFS.exists("/index.html"))
+    DBG_OUTPUT_PORT.println("SPIFFS: mounted but empty - run 'pio run -t uploadfs'");
 
   //WIFI INIT
   #ifdef WIFI_IS_OFF_AT_BOOT
@@ -554,6 +577,14 @@ void setup(void){
   WiFi.setSleep(false);
   WiFi.setTxPower(WIFI_POWER_19_5dBm);//25); //dbm
   WiFi.begin();
+
+  if (WiFi.softAPSSID().length() == 0)
+    WiFi.softAP(DEFAULT_AP_SSID, DEFAULT_AP_PW);
+
+  DBG_OUTPUT_PORT.printf("\r\nAP  : \"%s\" at %s\r\nSTA : \"%s\"\r\nheap: %u\r\n",
+                         WiFi.softAPSSID().c_str(), WiFi.softAPIP().toString().c_str(),
+                         WiFi.SSID().c_str(), (unsigned)ESP.getFreeHeap());
+
   sta_tick.attach(10, staCheck);
 
   MDNS.begin(host);
