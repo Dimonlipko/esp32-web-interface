@@ -26,14 +26,14 @@
         <p><label for="canEnablePin">CAN Enable Pin: </label><input id="canEnablePin" name="canEnablePin" type="text" value="%canEnablePin%"/> Set to 0 if not required</p>
 
         <h3 class="underline">Clara UART monitor</h3>
-        <p><label for="claraRXPin">Clara RX Pin: </label><input id="claraRXPin" name="claraRXPin" type="text" value="%claraRXPin%"/> ESP32 слухає TX Клари (PC10)</p>
-        <p><label for="claraTXPin">Clara TX Pin: </label><input id="claraTXPin" name="claraTXPin" type="text" value="%claraTXPin%"/> до RX Клари (PC11); порожньо = тільки слухати</p>
-        <p><label for="claraBaud">Clara baud: </label><input id="claraBaud" name="claraBaud" type="text" value="%claraBaud%"/> 0 вимикає монітор; термінал ccs32clara — 115200</p>
+        <p><label for="claraRXPin">Clara RX Pin: </label><input id="claraRXPin" name="claraRXPin" type="text" value="%claraRXPin%"/> ESP32 listens to Clara's TX (PC10)</p>
+        <p><label for="claraTXPin">Clara TX Pin: </label><input id="claraTXPin" name="claraTXPin" type="text" value="%claraTXPin%"/> to Clara's RX (PC11); leave empty to only listen</p>
+        <p><label for="claraBaud">Clara baud: </label><input id="claraBaud" name="claraBaud" type="text" value="%claraBaud%"/> 0 disables the monitor; the ccs32clara terminal runs at 115200</p>
 
-        <p><strong>ESP32-C3: доступні GPIO 0-10, 20, 21. 11 — VDD_SPI, 12-17 — flash, 18/19 — USB.</strong></p>
-        <p><strong>Плата Tesla wheel heater:- CAN TX 21 / RX 20, Clara на пінах LIN: TX 9 / RX 10</strong></p>
-        <p><strong>Open Inverter Can board:- TX Pin: 25 RX Pin: 26 (звичайний ESP32)</strong></p>
-        <p><strong>Lilygo T-Can board:- TX Pin: 27 RX Pin: 26 Can Enable Pin: 23 (звичайний ESP32)</strong></p>
+        <p><strong>ESP32-C3: usable GPIO are 0-10, 20 and 21. 11 is VDD_SPI, 12-17 the flash, 18/19 the USB.</strong></p>
+        <p><strong>Tesla wheel heater board:- CAN TX 21 / RX 20, Clara on the LIN pins: TX 9 / RX 10</strong></p>
+        <p><strong>Open Inverter Can board:- TX Pin: 25 RX Pin: 26 (plain ESP32)</strong></p>
+        <p><strong>Lilygo T-Can board:- TX Pin: 27 RX Pin: 26 Can Enable Pin: 23 (plain ESP32)</strong></p>
         <button type="button" onclick="ui.settingsForm('settingsForm');">
             <img class="buttonimg" src="/icon-check-circle.png">Modify</button>
     </form>

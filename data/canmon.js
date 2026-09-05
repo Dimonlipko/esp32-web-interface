@@ -188,9 +188,9 @@ var canmon = {
 		var el = document.getElementById('canmon-status');
 		if (!el) return;
 		var ids = Object.keys(canmon.ids).length;
-		el.textContent = (r.on ? 'приймаю все' : 'вимкнено') +
-		                 ' · ' + ids + ' ID' +
-		                 ' · кадрів ' + r.head +
-		                 (canmon.lostTotal ? ' · пропущено ' + canmon.lostTotal : '');
+		el.textContent = (r.on ? 'capturing' : 'stopped') +
+		                 ' · ' + ids + (ids === 1 ? ' ID' : ' IDs') +
+		                 ' · ' + r.head + ' frames' +
+		                 (canmon.lostTotal ? ' · ' + canmon.lostTotal + ' missed' : '');
 	}
 };

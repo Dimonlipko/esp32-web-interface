@@ -22,7 +22,7 @@ var wifi = {
 	{
 		var btn = document.getElementById('wifiScanBtn');
 		if (btn) btn.disabled = true;
-		wifi.scanStatus('Шукаю мережі…');
+		wifi.scanStatus('Scanning\u2026');
 		wifi.pollScan(0);
 	},
 
@@ -44,18 +44,18 @@ var wifi = {
 		{
 			var r;
 			try { r = JSON.parse(this.responseText); }
-			catch (e) { return wifi.scanDone(null, 'ESP відповів не тим'); }
+			catch (e) { return wifi.scanDone(null, 'unexpected reply from the ESP'); }
 
 			if (r.state === 'scanning')
 			{
 				// скан на ESP32 займає 2–4 с; 20 спроб по 700 мс з великим запасом
-				if (tries > 20) return wifi.scanDone(null, 'скан не завершився');
+				if (tries > 20) return wifi.scanDone(null, 'scan did not finish');
 				setTimeout(function() { wifi.pollScan(tries + 1); }, 700);
 				return;
 			}
 			wifi.scanDone(r.networks || [], null);
 		};
-		xhr.onerror = function() { wifi.scanDone(null, 'немає відповіді від ESP'); };
+		xhr.onerror = function() { wifi.scanDone(null, 'no reply from the ESP'); };
 		xhr.open('GET', '/wifi/scan', true);
 		xhr.send();
 	},
@@ -66,7 +66,7 @@ var wifi = {
 		if (btn) btn.disabled = false;
 
 		if (error) return wifi.scanStatus(error, true);
-		if (!networks.length) return wifi.scanStatus('Нічого не знайдено');
+		if (!networks.length) return wifi.scanStatus('No networks found');
 
 		networks.sort(function(a, b) { return b.rssi - a.rssi; });
 
@@ -85,7 +85,7 @@ var wifi = {
 			var name = tr.insertCell(-1);
 			var a = document.createElement('a');
 			a.href = '#';
-			a.textContent = n.ssid || '(прихована)';
+			a.textContent = n.ssid || '(hidden)';
 			a.onclick = (function(ssid) {
 				return function(e) {
 					e.preventDefault();
@@ -96,7 +96,7 @@ var wifi = {
 			})(n.ssid);
 			name.appendChild(a);
 
-			tr.insertCell(-1).textContent = n.open ? 'відкрита' : 'WPA';
+			tr.insertCell(-1).textContent = n.open ? 'open' : 'WPA';
 			tr.insertCell(-1).textContent = n.rssi + ' dBm';
 		}
 		box.appendChild(table);

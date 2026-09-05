@@ -86,16 +86,34 @@ var theme = {
 			xhr.send();
 		}, 5000);
 
-		// --- згорнутий сайдбар: ховаємо підписи, а не обрізаємо їх -----------
+		// --- згорнутий сайдбар ------------------------------------------------
+		// ui.shrinkNavbar/growNavbar лишились з часів, коли іконки меню були
+		// .buttonimg: вони й досі розганяють КОЖНУ .buttonimg до 60px завширшки,
+		// не чіпаючи висоти. Тепер меню на inline-SVG (.navimg), тож єдиний
+		// ефект — розплющені іконки на кнопках усередині сторінок. Заодно
+		// growNavbar лупить display:block по .small-screen-hide, що збиває
+		// flex-розкладку перемикача Auto reload. Прибираємо обидва інлайни.
 		if (window.ui && ui.shrinkNavbar) {
 			var origShrink = ui.shrinkNavbar, origGrow = ui.growNavbar;
+
+			var clearButtonImgWidths = function() {
+				var imgs = document.getElementsByClassName('buttonimg');
+				for (var i = 0; i < imgs.length; i++) imgs[i].style.width = '';
+			};
+
 			ui.shrinkNavbar = function() {
 				origShrink.call(ui);
 				document.getElementById('navbar').classList.add('collapsed');
+				clearButtonImgWidths();
 			};
 			ui.growNavbar = function() {
 				origGrow.call(ui);
 				document.getElementById('navbar').classList.remove('collapsed');
+				clearButtonImgWidths();
+				// display лишаємо на розсуд CSS: .control — блок, а
+				// #auto-reload-toggle-div — flex із власним відступом.
+				var items = document.getElementsByClassName('small-screen-hide');
+				for (var i = 0; i < items.length; i++) items[i].style.display = '';
 			};
 		}
 

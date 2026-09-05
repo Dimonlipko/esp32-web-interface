@@ -408,28 +408,29 @@
 				<!-- CAN MONITOR -->
 				<div id="canmon" class="tabdiv main-content">
 					<h3 class="underline">CAN monitor</h3>
-					<p class="clara-hint">Знімає апаратний фільтр і показує весь трафік шини. Пристрій тримає
-						останні 256 кадрів і віддає до 120 за запит &mdash; на завантаженій шині частина
-						пролетить повз, це видно в лічильнику. Звузьте фільтром або дивіться режим &laquo;за ID&raquo;.</p>
+					<p class="clara-hint">Drops the hardware acceptance filter and shows everything on the bus. The device
+						keeps the last 256 frames and returns up to 120 per poll &mdash; on a busy bus some
+						will slip past, and the counter says how many. Narrow it down with the filter, or
+						use the &laquo;by ID&raquo; view.</p>
 
 					<div class="canmon-bar">
 						<button type="button" id="canmon-toggle" onclick="canmon.setEnabled(!canmon.timer);">Start</button>
 						<button type="button" onclick="canmon.clear();">Clear</button>
 						<span class="seg">
-							<button type="button" id="canmon-view-log" class="active" onclick="canmon.setView('log');">Стрічка</button>
-							<button type="button" id="canmon-view-byid" onclick="canmon.setView('byid');">За ID</button>
+							<button type="button" id="canmon-view-log" class="active" onclick="canmon.setView('log');">Log</button>
+							<button type="button" id="canmon-view-byid" onclick="canmon.setView('byid');">By ID</button>
 						</span>
 						<label for="canmon-id">ID</label>
 						<input type="text" id="canmon-id" size="6" placeholder="7DE" title="hex">
-						<label for="canmon-mask">маска</label>
-						<input type="text" id="canmon-mask" size="6" placeholder="7FF" title="hex, 0 = усі">
+						<label for="canmon-mask">mask</label>
+						<input type="text" id="canmon-mask" size="6" placeholder="7FF" title="hex, 0 = everything">
 						<button type="button" onclick="canmon.applyFilter();">Apply</button>
 					</div>
 					<p><span id="canmon-status" class="clara-hint"></span></p>
 
 					<div id="canmon-log"></div>
 					<table id="canmon-table" hidden>
-						<thead><tr><th>ID</th><th>DLC</th><th>Data</th><th>Кадрів</th><th>Період</th></tr></thead>
+						<thead><tr><th>ID</th><th>DLC</th><th>Data</th><th>Frames</th><th>Period</th></tr></thead>
 						<tbody id="canmon-body"></tbody>
 					</table>
 				</div>
@@ -437,11 +438,11 @@
 				<!-- CLARA UART -->
 				<div id="clara" class="tabdiv main-content">
 					<h3 class="underline">Clara UART monitor</h3>
-					<p class="clara-hint">Термінал ccs32clara (UART4, 8N1). Піни й швидкість &mdash; на вкладці Settings.</p>
+					<p class="clara-hint">ccs32clara terminal (UART4, 8N1). Pins and baud rate are on the Settings tab.</p>
 					<div id="clara-log"></div>
 					<div class="clara-bar">
 						<input type="text" id="clara-input" spellcheck="false" autocomplete="off"
-						       placeholder="команда для Клари, Enter — надіслати" onkeyup="clara.onKey(event);">
+						       placeholder="command for Clara, Enter to send" onkeyup="clara.onKey(event);">
 						<button onclick="clara.send();">Send</button>
 						<button onclick="clara.clear();">Clear</button>
 					</div>

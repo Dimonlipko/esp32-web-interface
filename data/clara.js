@@ -73,7 +73,7 @@ var clara = {
 			}
 
 			if (r.lost > 0)
-				clara.append('--- пропущено ' + r.lost + ' рядків ---', 'lost');
+				clara.append('--- ' + r.lost + ' lines missed ---', 'lost');
 
 			for (var i = 0; i < r.lines.length; i++)
 				clara.append(r.lines[i], r.lines[i].indexOf('> ') > 0 ? 'sent' : '');
